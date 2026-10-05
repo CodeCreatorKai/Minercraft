@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>STEMCraft: Eco Miner (Classic Voxel Style)</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden; /* Prevent scrollbars */
+            background-color: #74BEE8; /* Sky color */
+            font-family: 'Courier New', Courier, monospace; /* Classic Minecraft-style font */
+            user-select: none; /* Prevent text selection */
+        }
+        #gameCanvas {
+            display: block;
+            cursor: crosshair;
+        }
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border: 2px solid white;
+            image-rendering: pixelated; /* Crisp pixel edges */
+        }
+        #inventory {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            background-color: rgba(0, 0, 0, 0.5);
+            padding: 5px;
+            border: 2px solid white;
+            image-rendering: pixelated;
+        }
+        .inv-slot {
+            width: 40px;
+            height: 40px;
+            margin: 2px;
+            background-color: rgba(255, 255, 255, 0.2);
+            border: 1px solid white;
+            position: relative;
+        }
+        .inv-icon {
+            position: absolute;
+            top: 4px;
+            left: 4px;
+            width: 32px;
+            height: 32px;
+            image-rendering: pixelated;
+        }
+        .inv-count {
+            position: absolute;
+            bottom: 1px;
+            right: 1px;
+            font-size: 12px;
+            color: white;
+        }
+        #tooltip {
+            position: absolute;
+            bottom: 60px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            display: none;
+            background: black;
+            padding: 5px;
+            border: 1px solid white;
+        }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <div id="timeOfDay">Time: 08:00 (Day)</div>
+    <div id="depth">Depth: 0m</div>
+    <div id="quest">Quest: Collect 5 Iron Ore (0/5)</div>
+</div>
+
+<div id="inventory"></div>
+<div id="tooltip"></div>
+
+<canvas id="gameCanvas"></canvas>
+
+<script>
+    // --- Configuration ---
+    const TILE_SIZE = 32; // Size of individual pixel blocks
+    const VIEW_WIDTH = 25; // How many blocks wide is the view
+    const VIEW_HEIGHT = 15; // How many blocks high is the view
+    const WORLD_DEPTH = 100; // How deep the world goes
+
+    // --- Core Canvas Setup ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = VIEW_WIDTH * TILE_SIZE;
+    canvas.height = VIEW_HEIGHT * TILE_SIZE;
+
+    // --- Block Definitions & "Textured" Graphics (School Appropriate) ---
+    const BLOCKS = {
+        0: { name: 'Air', color: '#74BEE8', solid: false }, // Sky
+        1: { name: 'Grass', color: '#55BB33', solid: true, 
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#55BB33'; // Base green
+                 ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                 // Minecraft dirt texture pattern
+                 ctx.fillStyle = '#774422'; // Dirt color
+                 ctx.fillRect(x, y + TILE_SIZE*0.75, TILE_SIZE, TILE_SIZE*0.25);
+                 ctx.fillStyle = '#33AA11'; // Noise green
+                 ctx.fillRect(x + 2, y + 2, 4, 4);
+                 ctx.fillRect(x + 10, y + 6, 4, 4);
+                 ctx.fillRect(x + 20, y + 2, 6, 6);
+             }
+           },
+        2: { name: 'Dirt', color: '#774422', solid: true,
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#774422'; // Base brown
+                 ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                 // Noise brown/pebbles
+                 ctx.fillStyle = '#663311'; 
+                 ctx.fillRect(x + 4, y + 4, 4, 4);
+                 ctx.fillRect(x + 12, y + 16, 6, 6);
+                 ctx.fillRect(x + 24, y + 8, 4, 4);
+             }
+           },
+        3: { name: 'Stone', color: '#AAAAAA', solid: true,
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#AAAAAA'; // Base grey
+                 ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                 // Paving pattern
+                 ctx.fillStyle = '#BBBBBB';
+                 ctx.fillRect(x, y, TILE_SIZE-2, TILE_SIZE-2);
+                 ctx.fillStyle = '#999999';
+                 ctx.fillRect(x + 2, y + 2, TILE_SIZE-4, TILE_SIZE-4);
+             }
+           },
+        4: { name: 'Iron Ore', color: '#CC9966', solid: true,
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#AAAAAA'; // Stone base
+                 ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                 // Iron specs (Peachy/orange/brown)
+                 ctx.fillStyle = '#DDAA77';
+                 ctx.fillRect(x + 4, y + 4, 8, 8);
+                 ctx.fillRect(x + 16, y + 16, 8, 8);
+                 ctx.fillRect(x + 20, y + 4, 6, 6);
+             }
+           },
+        5: { name: 'Solar Drill', color: '#F1C40F', solid: true, special: 'drill',
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#CCCCCC'; // Base metal
+                 ctx.fillRect(x + 4, y + 4, TILE_SIZE-8, TILE_SIZE-8);
+                 // Solar Panel grid
+                 ctx.fillStyle = '#F1C40F'; // Bright Yellow
+                 ctx.fillRect(x + 8, y + 8, TILE_SIZE-16, 8);
+                 ctx.fillStyle = '#E67E22'; // Orange Accent
+                 ctx.fillRect(x + 8, y + 20, TILE_SIZE-16, 4);
+                 // Drill bit
+                 ctx.fillStyle = '#666666';
+                 ctx.fillRect(x + 12, y + TILE_SIZE-8, TILE_SIZE-24, 8);
+             }
+           },
+        6: { name: 'Eco Bedrock', color: '#000000', solid: true,
+             draw: (ctx, x, y) => {
+                 ctx.fillStyle = '#000000'; // Pure black
+                 ctx.fillRect(x, y, TILE_SIZE, TILE_SIZE);
+                 // Noisy highlights
+                 ctx.fillStyle = '#333333';
+                 ctx.fillRect(x + 2, y + 2, 4, 4);
+                 ctx.fillRect(x + TILE_SIZE-8, y + TILE_SIZE-8, 6, 6);
+             }
+           }
+    };
+
+    // --- State Variables ---
+    let world = [];
+    let player = { x: 5 * TILE_SIZE, y: (VIEW_HEIGHT - 6) * TILE_SIZE, vx: 0, vy: 0 };
+    let cameraY = 0;
+    let inventory = { 4: 0, 5: 0 }; // Example starting items (0 iron, 0 drills)
+    let quests = [
+        { id: 1, type: 'collect', item: 4, amount: 5, text: "Collect 5 Iron Ore", complete: false },
+        { id: 2, type: 'build', item: 5, amount: 1, text: "Build 1 Solar Drill", complete: false }
+    ];
+    let activeQuestIndex = 0;
+    let time = 8; // Start at 8 AM
+    let localSavingEnabled = false;
+
+    // --- Initialization ---
+    function initWorld() {
+        world = [];
+        for (let y = 0; y < WORLD_DEPTH; y++) {
+            let row = [];
+            for (let x = 0; x < VIEW_WIDTH; x++) {
+                if (y < VIEW_HEIGHT - 6) {
+                    row.push(0); // Sky
+                } else if (y === VIEW_HEIGHT - 6) {
+                    row.push(1); // Grass surface
+                } else if (y < VIEW_HEIGHT) {
+                    row.push(2); // Dirt layer
+                } else if (y === WORLD_DEPTH - 1) {
+                    row.push(6); // Bedrock
+                } else {
+                    // Stone layer with random Iron Ore
+                    row.push(Math.random() < 0.1 ? 4 : 3); 
+                }
+            }
+            world.push(row);
+        }
+        loadGame();
+    }
+
+    // --- Saving & Loading ---
+    function saveGame() {
+        if (!localSavingEnabled) return;
+        localStorage.setItem('stemcraft_save', JSON.stringify({
+            player, world, cameraY, inventory, quests, activeQuestIndex, time
+        }));
+    }
+
+    function loadGame() {
+        const savedData = localStorage.getItem('stemcraft_save');
+        if (savedData) {
+            localSavingEnabled = true;
+            const data = JSON.parse(savedData);
+            // Restore state (basic restoration, world map is complex)
+            player = data.player;
+            cameraY = data.cameraY;
+            inventory = data.inventory;
+            // world = data.world; // Restoring world from localStorage is risky/complex for simple demo
+            // time = data.time;
+        } else {
+            // First time player
+            localSavingEnabled = true;
+        }
+    }
+
+    // --- Utility Functions ---
+    function getWorldBlock(gx, gy) {
+        if (gx < 0 || gx >= VIEW_WIDTH || gy < 0 || gy >= WORLD_DEPTH) return 0; // Boundary = Air
+        return world[gy][gx];
+    }
+
+    function setWorldBlock(gx, gy, blockId) {
+        if (gx < 0 || gx >= VIEW_WIDTH || gy < 0 || gy >= WORLD_DEPTH) return;
+        world[gy][gx] = blockId;
+        saveGame();
+    }
+
+    function addInventory(blockId, count) {
+        if (!inventory[blockId]) inventory[blockId] = 0;
+        inventory[blockId] += count;
+        updateUI();
+        saveGame();
+    }
+
+    function checkQuestProgress() {
+        if (activeQuestIndex >= quests.length) return;
+        const currentQuest = quests[activeQuestIndex];
+        if (currentQuest.complete) return;
+
+        if (currentQuest.type === 'collect') {
+            const currentAmount = inventory[currentQuest.item] || 0;
+            updateQuestUI(`${currentQuest.text} (${currentAmount}/${currentQuest.amount})`);
+            if (currentAmount >= currentQuest.amount) {
+                completeQuest();
+            }
+        }
+    }
+
+    function completeQuest() {
+        quests[activeQuestIndex].complete = true;
+        updateQuestUI(`${quests[activeQuestIndex].text} (COMPLETE)`);
+        // Award something, maybe a drill
+        if (quests[activeQuestIndex].id === 1) {
+            addInventory(5, 1); // Reward 1 Drill
+        }
+        
+        activeQuestIndex++;
+        setTimeout(initNextQuest, 1500);
+        saveGame();
+    }
+
+    function initNextQuest() {
+        if (activeQuestIndex < quests.length) {
+            checkQuestProgress(); // Start checking immediately
+        } else {
+            updateQuestUI("All Quests Complete! Explore!");
+        }
+    }
+
+    // --- Update UI Elements ---
+    function updateUI() {
+        // Depth
+        const currentDepth = Math.max(0, Math.floor((player.y - (VIEW_HEIGHT-6)*TILE_SIZE) / TILE_SIZE));
+        document.getElementById('depth').textContent = `Depth: ${currentDepth}m`;
+
+        // Time
+        let hour = Math.floor(time);
+        let cycle = hour < 18 && hour > 6 ? "Day" : "Night (Frost Dust)";
+        document.getElementById('timeOfDay').textContent = `Time: ${String(hour).padStart(2, '0')}:00 (${cycle})`;
+
+        // Inventory
+        const invDiv = document.getElementById('inventory');
+        invDiv.innerHTML = '';
+        Object.keys(inventory).forEach(blockId => {
+            if (inventory[blockId] > 0 || BLOCKS[blockId].special) {
+                const slot = document.createElement('div');
+                slot.className = 'inv-slot';
+                slot.dataset.blockId = blockId;
+                
+                // Drawing the icon (we use the block definition draw function here for simplicity)
+                const iconCanvas = document.createElement('canvas');
+                iconCanvas.width = TILE_SIZE;
+                iconCanvas.height = TILE_SIZE;
+                const iconCtx = iconCanvas.getContext('2d');
+                BLOCKS[blockId].draw(iconCtx, 0, 0);
+
+                const iconImg = document.createElement('img');
+                iconImg.src = iconCanvas.toDataURL();
+                iconImg.className = 'inv-icon';
+                slot.appendChild(iconImg);
+
+                const count = document.createElement('span');
+                count.className = 'inv-count';
+                count.textContent = inventory[blockId];
+                slot.appendChild(count);
+
+                // Quick build functionality on click
+                slot.onclick = () => tryPlaceBlock(blockId);
+
+                // Tooltip functionality
+                slot.onmouseover = (e) => showTooltip(e, BLOCKS[blockId].name);
+                slot.onmouseout = hideTooltip;
+
+                invDiv.appendChild(slot);
+            }
+        });
+        checkQuestProgress();
+    }
+
+    function updateQuestUI(text) {
+        document.getElementById('quest').textContent = `Quest: ${text}`;
+    }
+
+    // --- Tooltip Logic ---
+    function showTooltip(e, text) {
+        const tooltip = document.getElementById('tooltip');
+        tooltip.textContent = text;
+        tooltip.style.display = 'block';
+        tooltip.style.left = e.pageX + 'px';
+        tooltip.style.top = (e.pageY - 40) + 'px';
+    }
+
+    function hideTooltip() {
+        document.getElementById('tooltip').style.display = 'none';
+    }
+
+    // --- Input Handling ---
+    const keys = { left: false, right: false, up: false, down: false };
+    window.addEventListener('keydown', e => {
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = true;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = true;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') keys.up = true;
+    });
+    window.addEventListener('keyup', e => {
+        if (e.key === 'ArrowLeft' || e.key === 'a') keys.left = false;
+        if (e.key === 'ArrowRight' || e.key === 'd') keys.right = false;
+        if (e.key === 'ArrowUp' || e.key === 'w' || e.key === ' ') keys.up = false;
+    });
+
+    // Mining / Building Logic
+    canvas.addEventListener('mousedown', e => {
+        const rect = canvas.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+
+        const gx = Math.floor(mx / TILE_SIZE);
+        const gy = Math.floor((my + cameraY) / TILE_SIZE);
+
+        const blockId = getWorldBlock(gx, gy);
+
+        // School appropriate mining (remove blocks)
+        if (blockId > 0 && blockId < 6) { // Mineable, but not bedrock/air
+            // Collect the resource
+            if (blockId !== 1 && blockId !== 2) { // Don't clog inventory with dirt/grass
+                 addInventory(blockId, 1);
+            }
+            setWorldBlock(gx, gy, 0); // Replace with Air
+        }
+    });
+
+    function tryPlaceBlock(blockId) {
+        if (inventory[blockId] <= 0) return;
+
+        // Simplified placing: places block in front of player
+        let gx = Math.floor((player.x + (keys.left ? -TILE_SIZE : TILE_SIZE)) / TILE_SIZE);
+        let gy = Math.floor((player.y + cameraY) / TILE_SIZE);
+
+        if (getWorldBlock(gx, gy) === 0) { // Can only place in Air
+            setWorldBlock(gx, gy, blockId);
+            addInventory(blockId, -1);
+            
+            // Special check for Build Quest
+            if (activeQuestIndex < quests.length && quests[activeQuestIndex].id === 2 && blockId == 5) {
+                completeQuest();
+            }
+        }
+    }
+
+    // --- Game Loop (Physics & Rendering) ---
+    function update(dt) {
+        // Basic Physics
+        player.vx = 0;
+        if (keys.left) player.vx = -4;
+        if (keys.right) player.vx = 4;
+
+        player.vy += 0.25; // Gravity
+
+        // Vertical collision / Jump
+        let nextY = player.y + player.vy;
+        let gy = Math.floor((nextY + cameraY) / TILE_SIZE);
+        let gx = Math.floor((player.x + TILE_SIZE/2) / TILE_SIZE);
+        if (getWorldBlock(gx, gy + 1) > 0) { // Standing on ground
+            if (player.vy > 0) { // Landing
+                player.y = (gy) * TILE_SIZE - cameraY; // Snap to top
+                player.vy = 0;
+            }
+            if (keys.up) player.vy = -7; // Jump
+        } else {
+            player.y = nextY;
+        }
+
+        // Horizontal collision (basic)
+        let nextX = player.x + player.vx;
+        gx = Math.floor((nextX + (player.vx > 0 ? TILE_SIZE : 0)) / TILE_SIZE);
+        gy = Math.floor((player.y + cameraY + TILE_SIZE/2) / TILE_SIZE);
+        if (getWorldBlock(gx, gy) === 0) {
+            player.x = nextX;
+        }
+
+        // Camera follow
+        cameraY = player.y - (VIEW_HEIGHT / 2) * TILE_SIZE;
+        cameraY = Math.max(0, Math.min(cameraY, (WORLD_DEPTH - VIEW_HEIGHT) * TILE_SIZE));
+
+        // Time Cycle (STEM concept - Solar efficiency/Night shifts)
+        time += dt * 0.1; // Minutes per second
+        if (time >= 24) time = 0;
+
+        // Solar Drills generation (Passive Grind component)
+        if (time < 18 && time > 6) { // Only during day
+             // (Simplified for demo, just check world for drills)
+             // In full game, would track placed special blocks
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw World (Visible Portion)
+        let startY = Math.floor(cameraY / TILE_SIZE);
+        let offsetY = -(cameraY % TILE_SIZE);
+
+        for (let y = 0; y < VIEW_HEIGHT + 1; y++) {
+            let gy = startY + y;
+            if (gy >= WORLD_DEPTH) break;
+
+            for (let x = 0; x < VIEW_WIDTH; x++) {
+                const blockId = world[gy][x];
+                const block = BLOCKS[blockId];
+                if (block.special) {
+                    block.draw(ctx, x * TILE_SIZE, y * TILE_SIZE + offsetY);
+                } else if (blockId !== 0) { // Don't draw Air
+                    // Use custom draw for textures, fallback to solid color
+                    if (block.draw) {
+                        block.draw(ctx, x * TILE_SIZE, y * TILE_SIZE + offsetY);
+                    } else {
+                        ctx.fillStyle = block.color;
+                        ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE + offsetY, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+        }
+
+        // Draw Player (Voxel character sprite - school appropriate)
+        ctx.fillStyle = '#E74C3C'; // Red torso
+        ctx.fillRect(player.x + 8, player.y + 8, TILE_SIZE - 16, TILE_SIZE - 16);
+        ctx.fillStyle = '#3498DB'; // Blue pants
+        ctx.fillRect(player.x + 8, player.y + 20, TILE_SIZE - 16, TILE_SIZE - 20);
+        ctx.fillStyle = '#F5B041'; // Yellow helmet/head
+        ctx.fillRect(player.x + 10, player.y + 2, TILE_SIZE - 20, TILE_SIZE - 22);
+    }
+
+    let lastTime = 0;
+    function gameLoop(timeStamp) {
+        const dt = (timeStamp - lastTime) / 16.67; // Normalize to ~60fps
+        lastTime = timeStamp;
+
+        update(dt);
+        draw();
+        updateUI();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- Start Game ---
+    initWorld();
+    updateUI();
+    initNextQuest();
+    requestAnimationFrame(gameLoop);
+
+</script>
+
+</body>
+</html>
