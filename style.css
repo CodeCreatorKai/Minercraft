@@ -23,9 +23,6 @@ body, html {
   left: 0;
 }
 
-/* ========================================================
-   HUD & CROSSHAIR
-   ======================================================== */
 #hud {
   position: absolute;
   top: 0;
@@ -66,7 +63,6 @@ body, html {
   height: 16px;
 }
 
-/* Status Bars */
 #status-bars {
   position: absolute;
   bottom: 60px;
@@ -84,11 +80,6 @@ body, html {
   width: 100%;
 }
 
-.air-row {
-  justify-content: flex-end;
-  height: 12px;
-}
-
 .stat-container {
   display: flex;
   gap: 2px;
@@ -100,7 +91,6 @@ body, html {
   border-radius: 1px;
 }
 
-/* XP Bar */
 #xp-container {
   position: absolute;
   bottom: 46px;
@@ -136,7 +126,6 @@ body, html {
   margin-top: -3px;
 }
 
-/* Hotbar */
 #hotbar {
   position: absolute;
   bottom: 6px;
@@ -179,7 +168,6 @@ body, html {
   text-shadow: 1px 1px 0 #000;
 }
 
-/* Twist Indicators */
 #twist-status {
   position: absolute;
   top: 15px;
@@ -204,46 +192,10 @@ body, html {
 
 #gravity-badge { border-color: #aa44ff; }
 #rewind-badge { border-color: #44ffaa; }
-#trial-badge { border-color: #ffbb00; }
 
 .key-hint { color: #ffdd44; }
 .gold-txt { color: #ffdd44; font-weight: bold; }
 
-/* Trial Banner */
-#trial-banner {
-  position: absolute;
-  top: 60px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: rgba(15, 10, 25, 0.95);
-  border: 2px solid #ffaa00;
-  border-radius: 6px;
-  padding: 12px 24px;
-  text-align: center;
-  box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
-}
-
-#trial-title {
-  color: #ffcc00;
-  font-weight: bold;
-  font-size: 16px;
-  letter-spacing: 1px;
-}
-
-#trial-desc {
-  font-size: 13px;
-  color: #eee;
-  margin-top: 4px;
-}
-
-#trial-timer {
-  font-size: 14px;
-  font-weight: bold;
-  color: #55ffff;
-  margin-top: 6px;
-}
-
-/* Rewind FX */
 #rewind-overlay {
   position: absolute;
   top: 0;
@@ -269,21 +221,14 @@ body, html {
 }
 
 .rewind-text {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: bold;
   color: #55ffff;
   letter-spacing: 4px;
   text-shadow: 0 0 10px #00ffff, 2px 2px #000;
   z-index: 2;
-  animation: pulse 0.5s infinite alternate;
 }
 
-@keyframes pulse {
-  from { opacity: 0.7; transform: scale(0.98); }
-  to { opacity: 1; transform: scale(1.02); }
-}
-
-/* Hurt Overlay */
 #hurt-overlay {
   position: absolute;
   top: 0;
@@ -296,9 +241,6 @@ body, html {
   transition: opacity 0.08s ease-out;
 }
 
-/* ========================================================
-   MENU & PAUSE SCREEN
-   ======================================================== */
 #pause-screen {
   position: absolute;
   top: 0;
@@ -332,7 +274,7 @@ body, html {
 }
 
 .logo-sub {
-  font-size: 14px;
+  font-size: 13px;
   color: #aaa;
   margin-top: 4px;
   margin-bottom: 24px;
@@ -365,14 +307,6 @@ body, html {
   border-top-color: #fff;
   border-left-color: #fff;
 }
-
-.mc-btn.gold {
-  background: #b8860b;
-  border-top-color: #ffd700;
-  border-left-color: #ffd700;
-}
-
-.mc-btn.gold:hover { background: #d4a017; }
 
 .instructions-panel {
   background: #1c1c1c;
@@ -409,9 +343,6 @@ body, html {
   margin-right: 4px;
 }
 
-/* ========================================================
-   INVENTORY & CRAFTING GUI
-   ======================================================== */
 #inventory-gui {
   position: absolute;
   top: 0;
@@ -484,22 +415,6 @@ body, html {
   grid-template-columns: repeat(9, 38px);
   gap: 4px;
   margin-bottom: 14px;
-}
-
-/* Debug Screen (F3) */
-#debug-screen {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 8px 12px;
-  font-size: 12px;
-  line-height: 1.5;
-  color: #fff;
-  font-family: monospace;
-  pointer-events: none;
-  z-index: 50;
-  border-radius: 4px;
 }
 
 .hidden { display: none !important; }
