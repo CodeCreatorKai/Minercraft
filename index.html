@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ChronoCraft: Gravity Rift (Definitive Edition)</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Three.js r128 Library from official CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+  <!-- 3D Canvas Container -->
+  <div id="game-container"></div>
+
+  <!-- In-Game Survival HUD -->
+  <div id="hud">
+    <!-- Crosshair -->
+    <div id="crosshair"></div>
+
+    <!-- Status Bars: Hearts, Hunger, Air -->
+    <div id="status-bars">
+      <div class="status-row">
+        <div id="health-bar" class="stat-container"></div>
+        <div id="hunger-bar" class="stat-container"></div>
+      </div>
+      <div class="status-row air-row">
+        <div id="air-bar" class="stat-container"></div>
+      </div>
+    </div>
+
+    <!-- XP Bar & Level -->
+    <div id="xp-container">
+      <div id="xp-bar-bg">
+        <div id="xp-bar-fill"></div>
+      </div>
+      <div id="xp-level-text">0</div>
+    </div>
+
+    <!-- Hotbar (Slots 1 to 9) -->
+    <div id="hotbar"></div>
+
+    <!-- Twist Indicators -->
+    <div id="twist-status">
+      <div class="twist-badge" id="gravity-badge">
+        <span class="key-hint">[G]</span> GRAVITY: <span id="grav-mode">NORMAL</span>
+      </div>
+      <div class="twist-badge" id="rewind-badge">
+        <span class="key-hint">[HOLD R]</span> CHRONO-REWIND (<span id="rewind-time">10.0s</span>)
+      </div>
+      <div class="twist-badge" id="trial-badge">
+        <span class="key-hint">[T]</span> TRIAL COURSE: <span id="trial-status">STAGE 1</span>
+      </div>
+    </div>
+
+    <!-- Trial Course Banner -->
+    <div id="trial-banner">
+      <div id="trial-title">TRIAL STAGE 1: CEILING TRAVERSE</div>
+      <div id="trial-desc">Press [G] to invert gravity and sprint along the obsidian ceiling runway!</div>
+    </div>
+
+    <!-- Rewind Post-Processing Effect Overlay -->
+    <div id="rewind-overlay">
+      <div class="rewind-scanline"></div>
+      <div class="rewind-text">⏮ REWINDING TIMELINE...</div>
+    </div>
+
+    <!-- Hurt Flash Screen -->
+    <div id="hurt-overlay"></div>
+  </div>
+
+  <!-- Start & Pause Screen -->
+  <div id="pause-screen">
+    <div class="menu-box">
+      <h1 class="logo-title">CHRONOCRAFT</h1>
+      <h3 class="logo-sub">GRAVITY RIFT &bull; DEFINITIVE EDITION</h3>
+      
+      <div class="menu-buttons">
+        <button id="btn-play" class="mc-btn">PLAY SURVIVAL WORLD</button>
+        <button id="btn-trial" class="mc-btn gold">START G & R TRIALS</button>
+      </div>
+
+      <div class="instructions-panel">
+        <h4>SURVIVAL CONTROLS & TWISTS</h4>
+        <div class="keys-grid">
+          <div><span class="k">WASD</span> Move</div>
+          <div><span class="k">SPACE</span> Jump / Swim</div>
+          <div><span class="k">L-SHIFT</span> Sneak</div>
+          <div><span class="k">L-CTRL</span> Sprint</div>
+          <div><span class="k">L-CLICK</span> Break / Attack</div>
+          <div><span class="k">R-CLICK</span> Place Block / TNT</div>
+          <div><span class="k">1 - 9</span> Hotbar Slots</div>
+          <div><span class="k">E</span> Toggle Inventory</div>
+          <div><span class="k gold-txt">G</span> Flip Gravity</div>
+          <div><span class="k gold-txt">HOLD R</span> Rewind Timeline</div>
+          <div><span class="k">T</span> Teleport to Course</div>
+          <div><span class="k">F3</span> Debug Telemetry</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory & Crafting GUI -->
+  <div id="inventory-gui" class="hidden">
+    <div class="gui-window">
+      <div class="gui-header">
+        <span>Crafting & Survival Inventory</span>
+        <button id="close-inv-btn">&times;</button>
+      </div>
+      
+      <div class="gui-body">
+        <div class="crafting-section">
+          <h4>Fast Crafting Table</h4>
+          <div class="recipes-grid">
+            <button class="recipe-btn" data-recipe="planks">4 Oak Planks (1 Log)</button>
+            <button class="recipe-btn" data-recipe="sticks">4 Sticks (2 Planks)</button>
+            <button class="recipe-btn" data-recipe="torches">4 Torches (1 Coal + 1 Stick)</button>
+            <button class="recipe-btn" data-recipe="tnt">1 TNT (4 Sand + 5 Gunpowder)</button>
+          </div>
+        </div>
+
+        <div class="backpack-section">
+          <h4>Backpack Storage (27 Slots)</h4>
+          <div id="backpack-grid"></div>
+        </div>
+
+        <div class="hotbar-section">
+          <h4>Active Hotbar</h4>
+          <div id="inv-hotbar-grid"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- F3 Debug Screen -->
+  <div id="debug-screen" class="hidden">
+    <div>ChronoCraft 1.0 (Three.js WebGL)</div>
+    <div id="dbg-fps">FPS: 60</div>
+    <div id="dbg-pos">XYZ: 0.00 / 0.00 / 0.00</div>
+    <div id="dbg-grav">Gravity: 1.0</div>
+    <div id="dbg-mobs">Active Entities: 0</div>
+    <div id="dbg-target">Looking at: None</div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
