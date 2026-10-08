@@ -1,0 +1,532 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body, html {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #000;
+  font-family: 'Courier New', Courier, monospace, sans-serif;
+  color: #fff;
+}
+
+#game-container {
+  width: 100vw;
+  height: 100vh;
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+
+/* ========================================================
+   HUD STYLES
+   ======================================================== */
+#hud {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+}
+
+#crosshair::before, #crosshair::after {
+  content: '';
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 2px #000;
+}
+
+#crosshair::before {
+  top: 7px;
+  left: 0;
+  width: 16px;
+  height: 2px;
+}
+
+#crosshair::after {
+  top: 0;
+  left: 7px;
+  width: 2px;
+  height: 16px;
+}
+
+/* Status Bars: Hearts, Food, Air */
+#status-bars {
+  position: absolute;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 364px;
+}
+
+.status-row {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.air-row {
+  justify-content: flex-end;
+  height: 12px;
+}
+
+.stat-container {
+  display: flex;
+  gap: 1px;
+}
+
+.stat-icon {
+  width: 16px;
+  height: 16px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+}
+
+/* XP Bar */
+#xp-container {
+  position: absolute;
+  bottom: 46px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 364px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#xp-bar-bg {
+  width: 100%;
+  height: 6px;
+  background: #111;
+  border: 1px solid #000;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+#xp-bar-fill {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #55ff55, #88ff00);
+  transition: width 0.1s linear;
+}
+
+#xp-level-text {
+  font-size: 14px;
+  font-weight: bold;
+  color: #7fff00;
+  text-shadow: 1px 1px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+  margin-top: -3px;
+}
+
+/* Hotbar */
+#hotbar {
+  position: absolute;
+  bottom: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 3px;
+  border: 2px solid #333;
+  border-radius: 4px;
+}
+
+.hotbar-slot {
+  width: 38px;
+  height: 38px;
+  background: #8b8b8b;
+  border: 2px solid #373737;
+  border-top-color: #fff;
+  border-left-color: #fff;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hotbar-slot.active {
+  border-color: #fff;
+  outline: 2px solid #55ff55;
+  background: #a0a0a0;
+}
+
+.slot-icon {
+  width: 28px;
+  height: 28px;
+  image-rendering: pixelated;
+}
+
+.slot-count {
+  position: absolute;
+  bottom: 1px;
+  right: 2px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #fff;
+  text-shadow: 1px 1px 0 #000;
+}
+
+/* Twist Status Badges */
+#twist-status {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+}
+
+.twist-badge {
+  background: rgba(10, 15, 25, 0.85);
+  border: 1px solid #44aaff;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+  text-shadow: 1px 1px 0 #000;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+#gravity-badge {
+  border-color: #aa44ff;
+}
+
+#rewind-badge {
+  border-color: #44ffaa;
+}
+
+#trial-badge {
+  border-color: #ffbb00;
+}
+
+.key-hint {
+  color: #ffdd44;
+}
+
+.gold-txt {
+  color: #ffdd44;
+  font-weight: bold;
+}
+
+/* Trial Banner */
+#trial-banner {
+  position: absolute;
+  top: 60px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 10, 25, 0.9);
+  border: 2px solid #ffaa00;
+  border-radius: 6px;
+  padding: 10px 20px;
+  text-align: center;
+  box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
+  transition: opacity 0.3s;
+}
+
+#trial-title {
+  color: #ffcc00;
+  font-weight: bold;
+  font-size: 15px;
+  letter-spacing: 1px;
+}
+
+#trial-desc {
+  font-size: 12px;
+  color: #eee;
+  margin-top: 4px;
+}
+
+/* Rewind Scanline FX Overlay */
+#rewind-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  background: rgba(20, 60, 120, 0.25);
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.rewind-scanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+  background-size: 100% 4px, 6px 100%;
+}
+
+.rewind-text {
+  font-size: 32px;
+  font-weight: bold;
+  color: #55ffff;
+  letter-spacing: 4px;
+  text-shadow: 0 0 10px #00ffff, 2px 2px #000;
+  z-index: 2;
+  animation: pulse 0.5s infinite alternate;
+}
+
+@keyframes pulse {
+  from { opacity: 0.7; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1.02); }
+}
+
+/* Hurt Overlay */
+#hurt-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 0, 0, 0.4);
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.08s ease-out;
+}
+
+/* ========================================================
+   MENU & PAUSE SCREEN
+   ======================================================== */
+#pause-screen {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.menu-box {
+  background: #2b2b2b;
+  border: 3px solid #555;
+  border-top-color: #888;
+  border-left-color: #888;
+  padding: 30px 40px;
+  width: 580px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+}
+
+.logo-title {
+  font-size: 40px;
+  letter-spacing: 4px;
+  color: #ffaa00;
+  text-shadow: 3px 3px 0 #000;
+}
+
+.logo-sub {
+  font-size: 14px;
+  color: #aaa;
+  margin-top: 4px;
+  margin-bottom: 24px;
+  letter-spacing: 2px;
+}
+
+.menu-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.mc-btn {
+  background: #737373;
+  color: #fff;
+  border: 2px solid #000;
+  border-top-color: #aaa;
+  border-left-color: #aaa;
+  padding: 12px;
+  font-size: 16px;
+  font-weight: bold;
+  font-family: inherit;
+  cursor: pointer;
+  text-shadow: 1px 1px 0 #000;
+  transition: background 0.1s;
+}
+
+.mc-btn:hover {
+  background: #8b8b8b;
+  border-top-color: #fff;
+  border-left-color: #fff;
+}
+
+.mc-btn:active {
+  background: #555;
+}
+
+.mc-btn.gold {
+  background: #b8860b;
+  border-top-color: #ffd700;
+  border-left-color: #ffd700;
+}
+
+.mc-btn.gold:hover {
+  background: #d4a017;
+}
+
+.instructions-panel {
+  background: #1c1c1c;
+  border: 2px solid #111;
+  padding: 16px;
+  text-align: left;
+}
+
+.instructions-panel h4 {
+  font-size: 13px;
+  color: #aaa;
+  margin-bottom: 12px;
+  text-align: center;
+  border-bottom: 1px solid #333;
+  padding-bottom: 6px;
+}
+
+.keys-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  row-gap: 8px;
+  column-gap: 16px;
+  font-size: 12px;
+}
+
+.k {
+  display: inline-block;
+  background: #333;
+  border: 1px solid #555;
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  color: #fff;
+  margin-right: 4px;
+}
+
+/* ========================================================
+   INVENTORY & CRAFTING GUI
+   ======================================================== */
+#inventory-gui {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 90;
+  pointer-events: auto;
+}
+
+.gui-window {
+  background: #c6c6c6;
+  border: 3px solid #373737;
+  border-top-color: #fff;
+  border-left-color: #fff;
+  color: #373737;
+  width: 500px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.7);
+}
+
+.gui-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 16px;
+  font-weight: bold;
+  border-bottom: 2px solid #555;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+}
+
+#close-inv-btn {
+  background: #c6c6c6;
+  border: 2px solid #000;
+  font-size: 16px;
+  font-weight: bold;
+  width: 24px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.recipes-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.recipe-btn {
+  background: #8b8b8b;
+  border: 2px solid #373737;
+  border-top-color: #fff;
+  border-left-color: #fff;
+  padding: 8px;
+  font-family: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recipe-btn:hover {
+  background: #a5a5a5;
+}
+
+#backpack-grid, #inv-hotbar-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 38px);
+  gap: 4px;
+  margin-bottom: 14px;
+}
+
+/* Debug Screen (F3) */
+#debug-screen {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 8px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #fff;
+  font-family: monospace;
+  pointer-events: none;
+  z-index: 50;
+  border-radius: 4px;
+}
+
+.hidden {
+  display: none !important;
+}
