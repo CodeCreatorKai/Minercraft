@@ -1,17 +1,17 @@
 /**
- * ChronoCraft: Gravity Rift (Definitive Edition)
- * Pure Three.js + Web Audio API voxel sandbox implementation.
+ * ChronoCraft: Gravity Rift (Definitive Survival Edition)
+ * Authentic Swept-AABB Minecraft Physics, Tiered Mining, Dropped Voxel Collectibles,
+ * and Comprehensive 5-Stage Time Trial Academy.
  */
 
 // =============================================================================
-// 1. CONFIGURATION & CONSTANTS
+// 1. CONSTANTS & BLOCK REGISTRY
 // =============================================================================
 const WORLD_WIDTH = 64;
 const WORLD_DEPTH = 64;
 const WORLD_HEIGHT = 48;
 const SEA_LEVEL = 14;
 
-// Block Types Registry
 const BLOCKS = {
   AIR: 0,
   GRASS: 1,
@@ -31,10 +31,22 @@ const BLOCKS = {
   TNT: 15,
   OBSIDIAN: 16,
   GLOWSTONE: 17,
-  BEDROCK: 18
+  BEDROCK: 18,
+  CRAFTING_TABLE: 19
 };
 
-const BLOCK_NAMES = {
+const ITEMS = {
+  STICK: 100,
+  WOODEN_PICKAXE: 101,
+  STONE_PICKAXE: 102,
+  DIAMOND: 103,
+  COAL: 104,
+  RAW_IRON: 105,
+  RAW_GOLD: 106,
+  RIFT_CORE: 107
+};
+
+const ITEM_NAMES = {
   [BLOCKS.GRASS]: "Grass Block",
   [BLOCKS.DIRT]: "Dirt",
   [BLOCKS.STONE]: "Stone",
@@ -52,7 +64,36 @@ const BLOCK_NAMES = {
   [BLOCKS.TNT]: "TNT",
   [BLOCKS.OBSIDIAN]: "Obsidian",
   [BLOCKS.GLOWSTONE]: "Glowstone",
-  [BLOCKS.BEDROCK]: "Bedrock"
+  [BLOCKS.BEDROCK]: "Bedrock",
+  [BLOCKS.CRAFTING_TABLE]: "Crafting Table",
+  [ITEMS.STICK]: "Stick",
+  [ITEMS.WOODEN_PICKAXE]: "Wooden Pickaxe",
+  [ITEMS.STONE_PICKAXE]: "Stone Pickaxe",
+  [ITEMS.DIAMOND]: "Diamond Gem",
+  [ITEMS.COAL]: "Lump of Coal",
+  [ITEMS.RAW_IRON]: "Raw Iron",
+  [ITEMS.RAW_GOLD]: "Raw Gold",
+  [ITEMS.RIFT_CORE]: "Rift Singularity Core"
+};
+
+// Mining parameters: Required tool tier and hardness
+const BLOCK_PROPERTIES = {
+  [BLOCKS.DIRT]: { hardness: 0.5, tool: 'any', drop: BLOCKS.DIRT },
+  [BLOCKS.GRASS]: { hardness: 0.6, tool: 'any', drop: BLOCKS.DIRT },
+  [BLOCKS.SAND]: { hardness: 0.5, tool: 'any', drop: BLOCKS.SAND },
+  [BLOCKS.OAK_LOG]: { hardness: 1.5, tool: 'any', drop: BLOCKS.OAK_LOG },
+  [BLOCKS.OAK_PLANKS]: { hardness: 1.2, tool: 'any', drop: BLOCKS.OAK_PLANKS },
+  [BLOCKS.OAK_LEAVES]: { hardness: 0.2, tool: 'any', drop: null },
+  [BLOCKS.COBBLE]: { hardness: 2.0, tool: 'pickaxe', minTier: 1, drop: BLOCKS.COBBLE },
+  [BLOCKS.STONE]: { hardness: 2.0, tool: 'pickaxe', minTier: 1, drop: BLOCKS.COBBLE },
+  [BLOCKS.COAL_ORE]: { hardness: 3.0, tool: 'pickaxe', minTier: 1, drop: ITEMS.COAL },
+  [BLOCKS.IRON_ORE]: { hardness: 3.5, tool: 'pickaxe', minTier: 2, drop: ITEMS.RAW_IRON },
+  [BLOCKS.GOLD_ORE]: { hardness: 3.5, tool: 'pickaxe', minTier: 2, drop: ITEMS.RAW_GOLD },
+  [BLOCKS.DIAMOND_ORE]: { hardness: 4.5, tool: 'pickaxe', minTier: 2, drop: ITEMS.DIAMOND },
+  [BLOCKS.OBSIDIAN]: { hardness: 10.0, tool: 'pickaxe', minTier: 3, drop: BLOCKS.OBSIDIAN },
+  [BLOCKS.TNT]: { hardness: 0.1, tool: 'any', drop: BLOCKS.TNT },
+  [BLOCKS.GLOWSTONE]: { hardness: 0.4, tool: 'any', drop: BLOCKS.GLOWSTONE },
+  [BLOCKS.CRAFTING_TABLE]: { hardness: 1.5, tool: 'any', drop: BLOCKS.CRAFTING_TABLE }
 };
 
 // =============================================================================
@@ -73,73 +114,73 @@ class SoundEngine {
     }
   }
 
-  playFootstep(isStone = false) {
+  playStep() {
     if (!this.ctx) return;
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
-    const filter = this.ctx.createBiquadFilter();
-
-    osc.type = isStone ? 'triangle' : 'sine';
-    const baseFreq = isStone ? 120 + Math.random() * 40 : 80 + Math.random() * 30;
-    osc.frequency.setValueAtTime(baseFreq, this.ctx.currentTime);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(80 + Math.random() * 40, this.ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(30, this.ctx.currentTime + 0.08);
 
-    filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(isStone ? 800 : 350, this.ctx.currentTime);
-
-    gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
-
-    osc.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-
-    osc.start();
-    osc.stop(this.ctx.currentTime + 0.09);
-  }
-
-  playBlockBreak() {
-    if (!this.ctx) return;
-    const bufferSize = this.ctx.sampleRate * 0.12;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.3));
-    }
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'bandpass';
-    filter.frequency.value = 650;
-    filter.Q.value = 1.2;
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-
-    noise.start();
-  }
-
-  playBlockPlace() {
-    if (!this.ctx) return;
-    const osc = this.ctx.createOscillator();
-    const gain = this.ctx.createGain();
-    osc.type = 'triangle';
-    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.07);
-
-    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.07);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.08);
+    osc.stop(this.ctx.currentTime + 0.09);
+  }
+
+  playBreak() {
+    if (!this.ctx) return;
+    const bufSize = this.ctx.sampleRate * 0.12;
+    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.3));
+
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.12);
+
+    noise.connect(gain);
+    gain.connect(this.ctx.destination);
+    noise.start();
+  }
+
+  playPlace() {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(170, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(80, this.ctx.currentTime + 0.08);
+
+    gain.gain.setValueAtTime(0.18, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.08);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.09);
+  }
+
+  playPickup() {
+    if (!this.ctx) return;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(450, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.1);
+
+    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start();
+    osc.stop(this.ctx.currentTime + 0.11);
   }
 
   playHurt() {
@@ -147,62 +188,35 @@ class SoundEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(140, this.ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.18);
+    osc.frequency.setValueAtTime(160, this.ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, this.ctx.currentTime + 0.2);
 
-    gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.18);
+    gain.gain.setValueAtTime(0.35, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.2);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
     osc.start();
-    osc.stop(this.ctx.currentTime + 0.19);
-  }
-
-  playFuse() {
-    if (!this.ctx) return;
-    const bufferSize = this.ctx.sampleRate * 1.5;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * 0.4;
-    }
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
-
-    const filter = this.ctx.createBiquadFilter();
-    filter.type = 'highpass';
-    filter.frequency.value = 2500;
-
-    const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 1.4);
-
-    noise.connect(filter);
-    filter.connect(gain);
-    gain.connect(this.ctx.destination);
-    noise.start();
+    osc.stop(this.ctx.currentTime + 0.21);
   }
 
   playExplosion() {
     if (!this.ctx) return;
-    const bufferSize = this.ctx.sampleRate * 0.7;
-    const buffer = this.ctx.createBuffer(1, bufferSize, this.ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < bufferSize; i++) {
-      data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.25));
-    }
-    const noise = this.ctx.createBufferSource();
-    noise.buffer = buffer;
+    const bufSize = this.ctx.sampleRate * 0.8;
+    const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufSize * 0.2));
 
+    const noise = this.ctx.createBufferSource();
+    noise.buffer = buf;
     const filter = this.ctx.createBiquadFilter();
     filter.type = 'lowpass';
     filter.frequency.setValueAtTime(600, this.ctx.currentTime);
-    filter.frequency.linearRampToValueAtTime(80, this.ctx.currentTime + 0.7);
+    filter.frequency.linearRampToValueAtTime(60, this.ctx.currentTime + 0.8);
 
     const gain = this.ctx.createGain();
-    gain.gain.setValueAtTime(0.5, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.7);
+    gain.gain.setValueAtTime(0.6, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.8);
 
     noise.connect(filter);
     filter.connect(gain);
@@ -234,9 +248,9 @@ class SoundEngine {
     const osc = this.ctx.createOscillator();
     const gain = this.ctx.createGain();
     osc.type = 'sawtooth';
-    osc.frequency.setValueAtTime(600 + Math.random() * 400, this.ctx.currentTime);
-    gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.05);
+    osc.frequency.setValueAtTime(700 + Math.random() * 300, this.ctx.currentTime);
+    gain.gain.setValueAtTime(0.06, this.ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.04);
 
     osc.connect(gain);
     gain.connect(this.ctx.destination);
@@ -246,19 +260,18 @@ class SoundEngine {
 
   playFanfare() {
     if (!this.ctx) return;
-    const notes = [261.63, 329.63, 392.00, 523.25];
-    notes.forEach((freq, idx) => {
+    [261.63, 329.63, 392.00, 523.25].forEach((freq, idx) => {
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.value = freq;
-      const startTime = this.ctx.currentTime + idx * 0.1;
-      gain.gain.setValueAtTime(0.2, startTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
+      const t = this.ctx.currentTime + idx * 0.12;
+      gain.gain.setValueAtTime(0.2, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.35);
       osc.connect(gain);
       gain.connect(this.ctx.destination);
-      osc.start(startTime);
-      osc.stop(startTime + 0.32);
+      osc.start(t);
+      osc.stop(t + 0.36);
     });
   }
 }
@@ -266,7 +279,7 @@ class SoundEngine {
 const sounds = new SoundEngine();
 
 // =============================================================================
-// 3. PROCEDURAL PIXEL TEXTURE GENERATOR
+// 3. PROCEDURAL TEXTURES & MATERIALS
 // =============================================================================
 function createPixelTexture(type) {
   const canvas = document.createElement('canvas');
@@ -274,18 +287,14 @@ function createPixelTexture(type) {
   canvas.height = 16;
   const ctx = canvas.getContext('2d');
 
-  function noise(colorHex, variance) {
-    const r = parseInt(colorHex.slice(1, 3), 16);
-    const g = parseInt(colorHex.slice(3, 5), 16);
-    const b = parseInt(colorHex.slice(5, 7), 16);
-
+  function noise(hex, variance) {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
     for (let x = 0; x < 16; x++) {
       for (let y = 0; y < 16; y++) {
         const delta = (Math.random() * 2 - 1) * variance;
-        const nr = Math.min(255, Math.max(0, r + delta));
-        const ng = Math.min(255, Math.max(0, g + delta));
-        const nb = Math.min(255, Math.max(0, b + delta));
-        ctx.fillStyle = `rgb(${nr|0},${ng|0},${nb|0})`;
+        ctx.fillStyle = `rgb(${Math.min(255, Math.max(0, r + delta)) | 0},${Math.min(255, Math.max(0, g + delta)) | 0},${Math.min(255, Math.max(0, b + delta)) | 0})`;
         ctx.fillRect(x, y, 1, 1);
       }
     }
@@ -325,28 +334,28 @@ function createPixelTexture(type) {
     case BLOCKS.DIAMOND_ORE:
       noise('#7a7a7a', 15);
       ctx.fillStyle = '#4dedf4';
-      ctx.fillRect(3, 4, 2, 2); ctx.fillRect(9, 3, 2, 2); ctx.fillRect(5, 10, 2, 2); ctx.fillRect(11, 11, 2, 2);
+      ctx.fillRect(3, 4, 2, 2); ctx.fillRect(9, 3, 2, 2); ctx.fillRect(5, 10, 2, 2);
       break;
     case BLOCKS.GOLD_ORE:
       noise('#7a7a7a', 15);
       ctx.fillStyle = '#fcee4b';
-      ctx.fillRect(4, 3, 2, 2); ctx.fillRect(10, 5, 2, 2); ctx.fillRect(3, 11, 2, 2);
+      ctx.fillRect(4, 3, 2, 2); ctx.fillRect(10, 5, 2, 2);
       break;
     case BLOCKS.IRON_ORE:
       noise('#7a7a7a', 15);
       ctx.fillStyle = '#d8af93';
-      ctx.fillRect(2, 5, 2, 2); ctx.fillRect(11, 4, 2, 2); ctx.fillRect(7, 10, 2, 2);
+      ctx.fillRect(2, 5, 2, 2); ctx.fillRect(11, 4, 2, 2);
       break;
     case BLOCKS.COAL_ORE:
       noise('#7a7a7a', 15);
       ctx.fillStyle = '#1c1c1c';
-      ctx.fillRect(3, 3, 3, 2); ctx.fillRect(9, 8, 2, 3); ctx.fillRect(5, 12, 2, 2);
+      ctx.fillRect(3, 3, 3, 2); ctx.fillRect(9, 8, 2, 3);
       break;
     case BLOCKS.GLASS:
       ctx.fillStyle = 'rgba(210, 240, 255, 0.4)';
       ctx.fillRect(0, 0, 16, 16);
       ctx.fillStyle = '#ffffff';
-      ctx.fillRect(2, 2, 2, 2); ctx.fillRect(11, 11, 2, 2);
+      ctx.fillRect(2, 2, 2, 2);
       break;
     case BLOCKS.WATER:
       ctx.fillStyle = 'rgba(30, 90, 220, 0.65)';
@@ -372,6 +381,11 @@ function createPixelTexture(type) {
     case BLOCKS.BEDROCK:
       noise('#222222', 45);
       break;
+    case BLOCKS.CRAFTING_TABLE:
+      noise('#9c7f4e', 18);
+      ctx.fillStyle = '#5c3e1e';
+      ctx.fillRect(2, 2, 12, 12);
+      break;
     default:
       noise('#ff00ff', 0);
   }
@@ -382,7 +396,6 @@ function createPixelTexture(type) {
   return texture;
 }
 
-// Generate shared material cache
 const materials = {};
 Object.values(BLOCKS).forEach(id => {
   if (id === BLOCKS.AIR) return;
@@ -395,14 +408,14 @@ Object.values(BLOCKS).forEach(id => {
 });
 
 // =============================================================================
-// 4. VOXEL WORLD ENGINE & INTERACTIVE TRIAL GENERATOR
+// 4. VOXEL WORLD ENGINE & TRIAL ACADEMY
 // =============================================================================
 class VoxelWorld {
   constructor(scene) {
     this.scene = scene;
     this.blocks = new Uint8Array(WORLD_WIDTH * WORLD_HEIGHT * WORLD_DEPTH);
     this.meshInstances = {};
-    this.maxInstances = 20000;
+    this.maxInstances = 25000;
     this.initInstancing();
   }
 
@@ -436,23 +449,22 @@ class VoxelWorld {
   generateWorld() {
     for (let x = 0; x < WORLD_WIDTH; x++) {
       for (let z = 0; z < WORLD_DEPTH; z++) {
-        // Bedrock floor
         this.setBlockInternal(x, 0, z, BLOCKS.BEDROCK);
 
-        // Procedural smooth hills
-        const height = Math.floor(
-          12 + Math.sin(x * 0.15) * 4 + Math.cos(z * 0.15) * 4 + Math.sin((x + z) * 0.08) * 3
-        );
+        // Terrain elevation curve
+        const baseH = 12;
+        const h1 = Math.sin(x * 0.1) * Math.cos(z * 0.1) * 6;
+        const h2 = Math.sin((x + z) * 0.05) * 4;
+        const height = Math.floor(baseH + h1 + h2);
 
         for (let y = 1; y < WORLD_HEIGHT; y++) {
           if (y < height - 3) {
-            // Underground stone & ores
             let block = BLOCKS.STONE;
             const r = Math.random();
             if (r < 0.015 && y < 14) block = BLOCKS.DIAMOND_ORE;
             else if (r < 0.025 && y < 18) block = BLOCKS.GOLD_ORE;
-            else if (r < 0.04) block = BLOCKS.IRON_ORE;
-            else if (r < 0.06) block = BLOCKS.COAL_ORE;
+            else if (r < 0.045) block = BLOCKS.IRON_ORE;
+            else if (r < 0.07) block = BLOCKS.COAL_ORE;
             this.setBlockInternal(x, y, z, block);
           } else if (y < height) {
             this.setBlockInternal(x, y, z, BLOCKS.DIRT);
@@ -463,17 +475,15 @@ class VoxelWorld {
           }
         }
 
-        // Spawn trees
-        if (x > 8 && x < WORLD_WIDTH - 8 && z > 8 && z < WORLD_DEPTH - 8) {
-          if (height > SEA_LEVEL + 1 && Math.random() < 0.02) {
+        // Spawn Oak Trees on lush land
+        if (x > 6 && x < WORLD_WIDTH - 6 && z > 6 && z < WORLD_DEPTH - 6) {
+          if (height > SEA_LEVEL + 1 && Math.random() < 0.025) {
             this.buildTree(x, height + 1, z);
           }
         }
       }
     }
 
-    // Build the "Chrono-Rift Trials" interactive course
-    this.buildTrialAcademy();
     this.rebuildAllMeshes();
   }
 
@@ -491,32 +501,34 @@ class VoxelWorld {
     }
   }
 
-  buildTrialAcademy() {
-    // Stage 1: Ceiling Traverse Track (Obsidian)
-    for (let x = 6; x <= 22; x++) {
-      this.setBlockInternal(x, 26, 8, BLOCKS.OBSIDIAN);
-      this.setBlockInternal(x, 26, 9, BLOCKS.OBSIDIAN);
+  buildTimeTrialCourse() {
+    // Stage 1: Ceiling Obsidian Track
+    for (let x = 8; x <= 24; x++) {
+      this.setBlockInternal(x, 28, 10, BLOCKS.OBSIDIAN);
+      this.setBlockInternal(x, 28, 11, BLOCKS.OBSIDIAN);
     }
-    this.setBlockInternal(22, 26, 8, BLOCKS.GLOWSTONE); // Stage 1 target beacon
+    this.setBlockInternal(24, 28, 10, BLOCKS.GLOWSTONE);
 
-    // Stage 2: Collapsing Sand Bridge over Void Pit
-    for (let z = 12; z <= 22; z++) {
-      this.setBlockInternal(22, 14, z, BLOCKS.SAND);
+    // Stage 2: Sand Bridge over Void
+    for (let z = 12; z <= 24; z++) {
+      this.setBlockInternal(24, 16, z, BLOCKS.SAND);
     }
-    this.setBlockInternal(22, 15, 23, BLOCKS.DIAMOND_ORE); // Stage 2 Key
+    this.setBlockInternal(24, 17, 25, BLOCKS.GLOWSTONE);
 
-    // Stage 3: Creeper Detonation Bridge
-    for (let x = 24; x <= 34; x++) {
-      this.setBlockInternal(x, 14, 23, BLOCKS.COBBLE);
+    // Stage 3: Detonation Runway
+    for (let x = 26; x <= 36; x++) {
+      this.setBlockInternal(x, 16, 25, BLOCKS.COBBLE);
     }
-    this.setBlockInternal(28, 15, 23, BLOCKS.TNT);
+    this.setBlockInternal(30, 17, 25, BLOCKS.TNT);
 
-    // Stage 4: Vertical Rift Gauntlet (Alternating ceiling & floor spikes)
-    for (let z = 25; z <= 35; z += 3) {
-      this.setBlockInternal(34, 15, z, BLOCKS.OBSIDIAN);
-      this.setBlockInternal(34, 25, z + 1, BLOCKS.OBSIDIAN);
+    // Stage 4: Mid-air Spikes
+    for (let z = 27; z <= 40; z += 3) {
+      this.setBlockInternal(36, 16, z, BLOCKS.OBSIDIAN);
+      this.setBlockInternal(36, 26, z + 1, BLOCKS.OBSIDIAN);
     }
-    this.setBlockInternal(34, 15, 36, BLOCKS.GLOWSTONE); // Final Victory Beacon
+    this.setBlockInternal(36, 16, 42, BLOCKS.GLOWSTONE);
+
+    this.rebuildAllMeshes();
   }
 
   isBlockOccluded(x, y, z) {
@@ -571,189 +583,130 @@ class VoxelWorld {
       const b = this.getBlock(x, y, z);
       if (b !== BLOCKS.AIR && b !== BLOCKS.WATER) return y;
     }
-    return 10;
+    return 12;
   }
 }
 
 // =============================================================================
-// 5. ANIMATED MOBS (Creepers, Zombies, Pigs)
+// 5. DROPPED VOXEL COLLECTIBLES & ENTITIES
 // =============================================================================
-class MobManager {
-  constructor(scene, world) {
+class DropItemManager {
+  constructor(scene) {
     this.scene = scene;
-    this.world = world;
-    this.mobs = [];
+    this.items = [];
+    this.boxGeo = new THREE.BoxGeometry(0.28, 0.28, 0.28);
   }
 
-  spawnMob(type, x, y, z) {
-    const group = new THREE.Group();
-    group.position.set(x, y, z);
+  spawnDrop(x, y, z, itemId) {
+    const mat = materials[itemId] || new THREE.MeshLambertMaterial({ color: 0xffaa00 });
+    const mesh = new THREE.Mesh(this.boxGeo, mat);
+    mesh.position.set(x, y + 0.2, z);
+    this.scene.add(mesh);
 
-    let mainColor = 0x33aa33;
-    if (type === 'zombie') mainColor = 0x228833;
-    if (type === 'pig') mainColor = 0xffaacc;
-
-    const bodyMat = new THREE.MeshLambertMaterial({ color: mainColor });
-    const headMat = new THREE.MeshLambertMaterial({ color: mainColor });
-
-    // Body
-    const bodyGeo = new THREE.BoxGeometry(0.6, type === 'pig' ? 0.6 : 0.9, 0.4);
-    const body = new THREE.Mesh(bodyGeo, bodyMat);
-    body.position.y = type === 'pig' ? 0.4 : 0.75;
-    group.add(body);
-
-    // Head
-    const headGeo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const head = new THREE.Mesh(headGeo, headMat);
-    head.position.y = type === 'pig' ? 0.6 : 1.4;
-    head.position.z = type === 'pig' ? 0.35 : 0;
-    group.add(head);
-
-    this.scene.add(group);
-
-    this.mobs.push({
-      type,
-      mesh: group,
-      head,
-      body,
-      pos: group.position,
-      vel: new THREE.Vector3(),
-      health: type === 'creeper' ? 20 : 15,
-      fuse: 0,
-      exploding: false
+    this.items.push({
+      id: itemId,
+      mesh,
+      pos: mesh.position,
+      vel: new THREE.Vector3((Math.random() - 0.5) * 2, 3.5, (Math.random() - 0.5) * 2),
+      rotSpeed: Math.random() * 2 + 1,
+      aliveTimer: 0
     });
   }
 
-  update(delta, playerPos, onExplosion) {
-    for (let i = this.mobs.length - 1; i >= 0; i--) {
-      const mob = this.mobs[i];
-      const dist = mob.pos.distanceTo(playerPos);
+  update(delta, player, world) {
+    for (let i = this.items.length - 1; i >= 0; i--) {
+      const item = this.items[i];
+      item.aliveTimer += delta;
 
-      // AI: Creeper pursuit & explosion
-      if (mob.type === 'creeper') {
-        if (dist < 12) {
-          const dir = new THREE.Vector3().subVectors(playerPos, mob.pos).setY(0).normalize();
-          mob.pos.addScaledVector(dir, delta * 2.0);
-          mob.mesh.lookAt(playerPos.x, mob.pos.y, playerPos.z);
+      // Gravity & Floor Collision
+      item.vel.y -= 14.0 * delta;
+      item.pos.y += item.vel.y * delta;
+      const bx = Math.floor(item.pos.x);
+      const by = Math.floor(item.pos.y);
+      const bz = Math.floor(item.pos.z);
 
-          if (dist < 3.2) {
-            mob.fuse += delta;
-            mob.body.material.color.setHex((Math.floor(mob.fuse * 10) % 2 === 0) ? 0xffffff : 0x33aa33);
-            if (mob.fuse >= 1.5 && !mob.exploding) {
-              mob.exploding = true;
-              onExplosion(mob.pos);
-              this.scene.remove(mob.mesh);
-              this.mobs.splice(i, 1);
-              continue;
-            }
-          } else {
-            mob.fuse = Math.max(0, mob.fuse - delta);
-            mob.body.material.color.setHex(0x33aa33);
-          }
-        }
-      } else if (mob.type === 'zombie') {
-        if (dist < 14) {
-          const dir = new THREE.Vector3().subVectors(playerPos, mob.pos).setY(0).normalize();
-          mob.pos.addScaledVector(dir, delta * 2.2);
-          mob.mesh.lookAt(playerPos.x, mob.pos.y, playerPos.z);
+      if (world.getBlock(bx, by, bz) !== BLOCKS.AIR) {
+        item.pos.y = by + 1.14;
+        item.vel.y = 0;
+      }
+
+      item.mesh.rotation.y += item.rotSpeed * delta;
+
+      // Magnet vacuum into player
+      const d = item.pos.distanceTo(player.pos);
+      if (d < 2.5) {
+        const pull = new THREE.Vector3().subVectors(player.pos, item.pos).normalize().multiplyScalar(6 * delta);
+        item.pos.add(pull);
+
+        if (d < 0.9) {
+          player.pickupItem(item.id, 1);
+          sounds.playPickup();
+          this.scene.remove(item.mesh);
+          this.items.splice(i, 1);
         }
       }
     }
   }
 
-  restoreMobState(snapshot) {
-    // Clear current mobs
-    this.mobs.forEach(m => this.scene.remove(m.mesh));
-    this.mobs = [];
-
-    // Reconstruct mobs from timeline snapshot
-    snapshot.forEach(data => {
-      this.spawnMob(data.type, data.x, data.y, data.z);
-      const m = this.mobs[this.mobs.length - 1];
-      m.health = data.health;
-    });
-  }
-
-  getSnapshot() {
-    return this.mobs.map(m => ({
-      type: m.type,
-      x: m.pos.x,
-      y: m.pos.y,
-      z: m.pos.z,
-      health: m.health
-    }));
+  clear() {
+    this.items.forEach(it => this.scene.remove(it.mesh));
+    this.items = [];
   }
 }
 
 // =============================================================================
-// 6. FIRST-PERSON PLAYER & SURVIVAL SIMULATION
+// 6. MINECRAFT DISCRETE SWEPT-AABB CONTROLLER & PROGRESSION
 // =============================================================================
-class PlayerController {
-  constructor(camera, world, mobs, scene) {
+class MinecraftPlayer {
+  constructor(camera, world, drops, scene) {
     this.camera = camera;
     this.world = world;
-    this.mobs = mobs;
+    this.drops = drops;
     this.scene = scene;
 
-    // Movement & Orientation
-    this.pos = new THREE.Vector3(24, 20, 24);
-    this.vel = new THREE.Vector3();
+    // AABB dimensions: 0.6w x 1.8h
+    this.hw = 0.3; // Half-width
+    this.hh = 0.9; // Half-height
+    this.pos = new THREE.Vector3(24.5, 20, 24.5);
+    this.vel = new THREE.Vector3(0, 0, 0);
+
     this.yaw = 0;
     this.pitch = 0;
     this.roll = 0;
+    this.targetRoll = 0;
     this.onGround = false;
 
     // Twist 1: Gravity Inversion
-    this.gravityDir = 1.0; // 1.0 = normal (down), -1.0 = inverted (up)
-    this.targetRoll = 0;
+    this.gravityDir = 1.0; // 1 = down, -1 = up
 
-    // Survival Stats
-    this.health = 20; // 10 Hearts
-    this.hunger = 20; // 10 Drumsticks
-    this.air = 20;    // 10 Bubbles
+    // Survival Attributes
+    this.health = 20;
+    this.hunger = 20;
     this.xp = 0;
     this.level = 0;
-    this.hungerTimer = 0;
     this.isSprinting = false;
     this.isSneaking = false;
-
-    // Hotbar & Inventory
-    this.hotbar = [
-      { id: BLOCKS.COBBLE, count: 64 },
-      { id: BLOCKS.OAK_PLANKS, count: 64 },
-      { id: BLOCKS.DIRT, count: 64 },
-      { id: BLOCKS.TNT, count: 16 },
-      { id: BLOCKS.GLOWSTONE, count: 32 },
-      { id: BLOCKS.OBSIDIAN, count: 16 },
-      { id: BLOCKS.GLASS, count: 32 },
-      { id: BLOCKS.SAND, count: 64 },
-      { id: BLOCKS.OAK_LOG, count: 32 }
-    ];
-    this.activeSlot = 0;
-
-    // First-Person 3D Arm
-    this.arm = null;
     this.armSwing = 0;
     this.walkBob = 0;
-    this.createPlayerArm();
 
-    // Twist 2: Chrono-Timeline Ring Buffer (10 seconds @ 20 ticks/sec)
+    // True Survival Inventory: Starts Completely Empty!
+    this.hotbar = new Array(9).fill(null);
+    this.backpack = new Array(27).fill(null);
+    this.activeSlot = 0;
+
+    // Chrono-Timeline
     this.timeline = [];
-    this.maxTimelineTicks = 200;
-    this.isRewinding = false;
+    this.maxTimeline = 200; // 10 seconds @ 20 ticks
 
-    // Interactive Trial Tracker
-    this.trialStage = 1;
+    // Time Trial Course State Machine
+    this.trialActive = false;
+    this.trialStage = 0;
+    this.trialTimer = 0;
 
-    // Input States
     this.keys = {};
+    this.createPlayerArm();
     this.setupListeners();
-    this.setupSafeSpawn();
-  }
-
-  setupSafeSpawn() {
-    const groundY = this.world.getHighestSolidY(24, 24);
-    this.pos.set(24.5, groundY + 2.1, 24.5);
+    this.respawnAtSurface();
   }
 
   createPlayerArm() {
@@ -762,41 +715,33 @@ class PlayerController {
     const armMat = new THREE.MeshLambertMaterial({ color: 0xc89870 });
     this.arm = new THREE.Mesh(armGeo, armMat);
     this.arm.position.set(0.35, -0.3, -0.5);
-    this.arm.rotation.set(0.2, -0.1, 0);
     this.armGroup.add(this.arm);
     this.camera.add(this.armGroup);
     this.scene.add(this.camera);
+  }
+
+  respawnAtSurface() {
+    const groundY = this.world.getHighestSolidY(24, 24);
+    this.pos.set(24.5, groundY + 2.0, 24.5);
+    this.vel.set(0, 0, 0);
   }
 
   setupListeners() {
     window.addEventListener('keydown', (e) => {
       this.keys[e.code] = true;
 
-      // Slot keys 1-9
       if (e.code >= 'Digit1' && e.code <= 'Digit9') {
         this.activeSlot = parseInt(e.code.replace('Digit', '')) - 1;
         updateHotbarUI();
       }
 
-      // Twist 1: Flip Gravity [G]
-      if (e.code === 'KeyG') {
-        this.toggleGravity();
-      }
+      if (e.code === 'KeyG') this.toggleGravity();
+      if (e.code === 'KeyE') toggleInventory();
+      if (e.code === 'KeyT') this.startTrialCourse();
 
-      // Toggle Inventory [E]
-      if (e.code === 'KeyE') {
-        toggleInventory();
-      }
-
-      // F3 Debug
       if (e.code === 'F3') {
         e.preventDefault();
         document.getElementById('debug-screen').classList.toggle('hidden');
-      }
-
-      // Teleport to Trial Course [T]
-      if (e.code === 'KeyT') {
-        this.teleportToTrial();
       }
     });
 
@@ -805,15 +750,11 @@ class PlayerController {
     });
 
     window.addEventListener('wheel', (e) => {
-      if (e.deltaY > 0) {
-        this.activeSlot = (this.activeSlot + 1) % 9;
-      } else {
-        this.activeSlot = (this.activeSlot + 8) % 9;
-      }
+      if (e.deltaY > 0) this.activeSlot = (this.activeSlot + 1) % 9;
+      else this.activeSlot = (this.activeSlot + 8) % 9;
       updateHotbarUI();
     });
 
-    // Mouse Look
     window.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement) {
         const sens = 0.0022;
@@ -823,12 +764,11 @@ class PlayerController {
       }
     });
 
-    // Mining & Placing
     window.addEventListener('mousedown', (e) => {
       if (!document.pointerLockElement) return;
       this.armSwing = 1.0;
-      if (e.button === 0) this.raycastAction(true);  // Left-click: mine/attack
-      if (e.button === 2) this.raycastAction(false); // Right-click: place
+      if (e.button === 0) this.raycastMine();
+      if (e.button === 2) this.raycastPlace();
     });
   }
 
@@ -836,89 +776,135 @@ class PlayerController {
     this.gravityDir *= -1;
     this.targetRoll = this.gravityDir === -1 ? Math.PI : 0;
     sounds.playGravityFlip(this.gravityDir === -1);
-    document.getElementById('grav-mode').innerText = this.gravityDir === -1 ? 'INVERTED (CEILING)' : 'NORMAL';
-    document.getElementById('gravity-badge').style.borderColor = this.gravityDir === -1 ? '#ff00ff' : '#aa44ff';
+    document.getElementById('grav-mode').innerText = this.gravityDir === -1 ? 'INVERTED' : 'NORMAL';
   }
 
-  teleportToTrial() {
-    this.pos.set(6.5, 16, 8.5);
-    this.vel.set(0, 0, 0);
-    this.gravityDir = 1.0;
-    this.targetRoll = 0;
-    this.trialStage = 1;
-    this.updateTrialUI();
-    sounds.playFanfare();
-  }
-
-  raycastAction(isBreak) {
-    const raycaster = new THREE.Raycaster();
-    raycaster.setFromCamera(new THREE.Vector2(0, 0), this.camera);
-    const reach = 5.5;
-
-    // Check mob hits on left click
-    if (isBreak) {
-      for (const mob of this.mobs.mobs) {
-        if (mob.pos.distanceTo(this.pos) < 3.5) {
-          mob.health -= 5;
-          sounds.playHurt();
-          if (mob.health <= 0) {
-            this.scene.remove(mob.mesh);
-            this.mobs.mobs.splice(this.mobs.mobs.indexOf(mob), 1);
-            this.xp += 10;
-            if (this.xp >= 30) {
-              this.level++;
-              this.xp = 0;
-              sounds.playFanfare();
-            }
-          }
-          return;
-        }
+  pickupItem(id, count) {
+    // Place into hotbar first
+    for (let i = 0; i < 9; i++) {
+      if (this.hotbar[i] && this.hotbar[i].id === id && this.hotbar[i].count < 64) {
+        this.hotbar[i].count += count;
+        updateHotbarUI();
+        return;
       }
     }
+    for (let i = 0; i < 9; i++) {
+      if (!this.hotbar[i]) {
+        this.hotbar[i] = { id, count };
+        updateHotbarUI();
+        return;
+      }
+    }
+    // Then backpack
+    for (let i = 0; i < 27; i++) {
+      if (this.backpack[i] && this.backpack[i].id === id && this.backpack[i].count < 64) {
+        this.backpack[i].count += count;
+        return;
+      }
+    }
+    for (let i = 0; i < 27; i++) {
+      if (!this.backpack[i]) {
+        this.backpack[i] = { id, count };
+        return;
+      }
+    }
+  }
 
-    // Step along the camera forward ray
-    const rayDir = raycaster.ray.direction;
+  getActiveToolTier() {
+    const item = this.hotbar[this.activeSlot];
+    if (!item) return 0;
+    if (item.id === ITEMS.WOODEN_PICKAXE) return 1;
+    if (item.id === ITEMS.STONE_PICKAXE) return 2;
+    return 0;
+  }
+
+  raycastMine() {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(0, 0), this.camera);
     const start = this.camera.position.clone();
-    for (let step = 0; step < reach * 10; step++) {
-      const checkPos = start.clone().addScaledVector(rayDir, step * 0.1);
-      const bx = Math.floor(checkPos.x);
-      const by = Math.floor(checkPos.y);
-      const bz = Math.floor(checkPos.z);
+    const dir = ray.ray.direction;
 
+    for (let d = 0; d < 50; d++) {
+      const p = start.clone().addScaledVector(dir, d * 0.1);
+      const bx = Math.floor(p.x);
+      const by = Math.floor(p.y);
+      const bz = Math.floor(p.z);
       const block = this.world.getBlock(bx, by, bz);
+
       if (block !== BLOCKS.AIR && block !== BLOCKS.WATER) {
-        if (isBreak) {
-          // Break block
-          if (block === BLOCKS.BEDROCK) return;
+        if (block === BLOCKS.BEDROCK) return;
+
+        const prop = BLOCK_PROPERTIES[block] || { hardness: 1.0, tool: 'any', drop: block };
+        const tier = this.getActiveToolTier();
+
+        // Check if correct tool is used
+        if (prop.minTier && tier < prop.minTier) {
+          // Breaks without drop if under-tiered
           this.world.setBlock(bx, by, bz, BLOCKS.AIR);
-          sounds.playBlockBreak();
-          this.recordBlockAction(bx, by, bz, block, BLOCKS.AIR);
-        } else {
-          // Place block against normal
-          const prev = start.clone().addScaledVector(rayDir, (step - 1) * 0.1);
-          const pbx = Math.floor(prev.x);
-          const pby = Math.floor(prev.y);
-          const pbz = Math.floor(prev.z);
+          sounds.playBreak();
+          return;
+        }
 
-          const activeItem = this.hotbar[this.activeSlot];
-          if (activeItem && activeItem.count > 0) {
-            // Cannot place inside player bounding box
-            const pbox = new THREE.Box3(
-              new THREE.Vector3(this.pos.x - 0.3, this.pos.y - 0.9, this.pos.z - 0.3),
-              new THREE.Vector3(this.pos.x + 0.3, this.pos.y + 0.9, this.pos.z + 0.3)
-            );
-            const bBox = new THREE.Box3(
-              new THREE.Vector3(pbx, pby, pbz),
-              new THREE.Vector3(pbx + 1, pby + 1, pbz + 1)
-            );
+        this.world.setBlock(bx, by, bz, BLOCKS.AIR);
+        sounds.playBreak();
 
-            if (!pbox.intersectsBox(bBox)) {
-              this.world.setBlock(pbx, pby, pbz, activeItem.id);
-              sounds.playBlockPlace();
-              activeItem.count--;
-              updateHotbarUI();
-              this.recordBlockAction(pbx, pby, pbz, BLOCKS.AIR, activeItem.id);
-            }
+        // Spawn dropped collectible
+        if (prop.drop) {
+          this.drops.spawnDrop(bx + 0.5, by + 0.5, bz + 0.5, prop.drop);
+        }
+
+        // Timeline recording for rewind
+        if (this.timeline.length > 0) {
+          this.timeline[this.timeline.length - 1].blockEdits.push({
+            x: bx, y: by, z: bz, oldType: block, newType: BLOCKS.AIR
+          });
+        }
+        return;
+      }
+    }
+  }
+
+  raycastPlace() {
+    const item = this.hotbar[this.activeSlot];
+    if (!item || item.count <= 0) return;
+
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(0, 0), this.camera);
+    const start = this.camera.position.clone();
+    const dir = ray.ray.direction;
+
+    for (let d = 0; d < 50; d++) {
+      const p = start.clone().addScaledVector(dir, d * 0.1);
+      const bx = Math.floor(p.x);
+      const by = Math.floor(p.y);
+      const bz = Math.floor(p.z);
+      const block = this.world.getBlock(bx, by, bz);
+
+      if (block !== BLOCKS.AIR && block !== BLOCKS.WATER) {
+        // Step back one increment to locate target face
+        const prev = start.clone().addScaledVector(dir, (d - 1) * 0.1);
+        const pbx = Math.floor(prev.x);
+        const pby = Math.floor(prev.y);
+        const pbz = Math.floor(prev.z);
+
+        // Do not place inside player AABB
+        if (Math.abs(this.pos.x - (pbx + 0.5)) < (this.hw + 0.5) &&
+            Math.abs(this.pos.y - (pby + 0.5)) < (this.hh + 0.5) &&
+            Math.abs(this.pos.z - (pbz + 0.5)) < (this.hw + 0.5)) {
+          return;
+        }
+
+        if (item.id < 100) { // Is valid voxel block
+          this.world.setBlock(pbx, pby, pbz, item.id);
+          sounds.playPlace();
+          item.count--;
+          if (item.count <= 0) this.hotbar[this.activeSlot] = null;
+          updateHotbarUI();
+
+          if (this.timeline.length > 0) {
+            this.timeline[this.timeline.length - 1].blockEdits.push({
+              x: pbx, y: pby, z: pbz, oldType: BLOCKS.AIR, newType: item.id
+            });
           }
         }
         return;
@@ -926,180 +912,174 @@ class PlayerController {
     }
   }
 
-  recordBlockAction(x, y, z, oldType, newType) {
-    if (this.timeline.length > 0) {
-      const top = this.timeline[this.timeline.length - 1];
-      top.blockEdits.push({ x, y, z, oldType, newType });
-    }
-  }
-
-  takeDamage(amount) {
-    this.health = Math.max(0, this.health - amount);
-    sounds.playHurt();
-    const hurtOverlay = document.getElementById('hurt-overlay');
-    hurtOverlay.style.opacity = '1';
-    setTimeout(() => hurtOverlay.style.opacity = '0', 120);
-
-    if (this.health <= 0) {
-      // Respawn
-      this.health = 20;
-      this.hunger = 20;
-      this.setupSafeSpawn();
-    }
-    updateStatusHUD();
+  startTrialCourse() {
+    this.world.buildTimeTrialCourse();
+    this.trialActive = true;
+    this.trialStage = 1;
+    this.trialTimer = 0;
+    this.pos.set(8.5, 17, 10.5);
+    this.vel.set(0, 0, 0);
+    this.gravityDir = 1.0;
+    this.targetRoll = 0;
+    document.getElementById('trial-banner').classList.remove('hidden');
+    this.updateTrialUI();
+    sounds.playFanfare();
   }
 
   update(delta) {
-    // Twist 2: Chrono-Rewind [HOLD R]
+    // Twist 2: Chrono Rewind
     if (this.keys['KeyR'] && this.timeline.length > 1) {
-      this.isRewinding = true;
       document.getElementById('rewind-overlay').style.display = 'flex';
-      const snap = this.timeline.pop();
       sounds.playRewindTick();
+      const snap = this.timeline.pop();
 
-      // Restore position & state
       this.pos.copy(snap.pos);
       this.vel.set(0, 0, 0);
       this.health = snap.health;
-      this.hunger = snap.hunger;
       this.gravityDir = snap.gravityDir;
       this.targetRoll = this.gravityDir === -1 ? Math.PI : 0;
 
-      // Undo block edits
       snap.blockEdits.forEach(b => {
         this.world.setBlockInternal(b.x, b.y, b.z, b.oldType);
       });
       if (snap.blockEdits.length > 0) this.world.rebuildAllMeshes();
-
-      // Restore mob snapshots
-      this.mobs.restoreMobState(snap.mobs);
       updateStatusHUD();
       return;
     } else {
-      this.isRewinding = false;
       document.getElementById('rewind-overlay').style.display = 'none';
     }
 
-    // Save timeline snapshot (20 snapshots/sec)
+    // Save timeline snapshot
     this.timeline.push({
       pos: this.pos.clone(),
       health: this.health,
-      hunger: this.hunger,
       gravityDir: this.gravityDir,
-      mobs: this.mobs.getSnapshot(),
       blockEdits: []
     });
-    if (this.timeline.length > this.maxTimelineTicks) this.timeline.shift();
+    if (this.timeline.length > this.maxTimeline) this.timeline.shift();
     document.getElementById('rewind-time').innerText = (this.timeline.length * 0.05).toFixed(1) + 's';
 
-    // Hunger exhaustion & natural health regeneration
-    this.hungerTimer += delta;
-    if (this.hungerTimer > 4.0) {
-      this.hungerTimer = 0;
-      if (this.hunger > 17 && this.health < 20) {
-        this.health = Math.min(20, this.health + 1);
-        updateStatusHUD();
-      }
-    }
-
-    // Smooth camera roll lerp for gravity inversion
+    // Camera roll interpolation
     this.roll = THREE.MathUtils.lerp(this.roll, this.targetRoll, delta * 12);
 
-    // Physics constants
-    const speed = this.isSprinting ? 7.5 : 4.5;
-    const accel = 60.0;
-    const gravityAccel = 24.0 * this.gravityDir;
-
-    // Movement vectors
-    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize();
-    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
-    const moveDir = new THREE.Vector3();
-
-    if (this.keys['KeyW']) moveDir.add(forward);
-    if (this.keys['KeyS']) moveDir.sub(forward);
-    if (this.keys['KeyD']) moveDir.add(right);
-    if (this.keys['KeyA']) moveDir.sub(right);
-    if (moveDir.lengthSq() > 0) moveDir.normalize();
-
-    this.isSprinting = !!this.keys['ControlLeft'] && moveDir.lengthSq() > 0;
+    // =========================================================================
+    // AUTHENTIC MINECRAFT VELOCITY & ACCELERATION CONSTANTS
+    // =========================================================================
+    this.isSprinting = !!this.keys['ControlLeft'];
     this.isSneaking = !!this.keys['ShiftLeft'];
 
-    // Horizontal acceleration & friction
-    this.vel.x += moveDir.x * accel * delta;
-    this.vel.z += moveDir.z * accel * delta;
-    const drag = this.onGround ? 12.0 : 2.5;
-    this.vel.x -= this.vel.x * drag * delta;
-    this.vel.z -= this.vel.z * drag * delta;
+    const accel = this.onGround ? (this.isSprinting ? 65 : 45) : 10;
+    const forward = new THREE.Vector3(-Math.sin(this.yaw), 0, -Math.cos(this.yaw)).normalize();
+    const right = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)).normalize();
+    const wishDir = new THREE.Vector3();
 
-    // Gravity acceleration
+    if (this.keys['KeyW']) wishDir.add(forward);
+    if (this.keys['KeyS']) wishDir.sub(forward);
+    if (this.keys['KeyD']) wishDir.add(right);
+    if (this.keys['KeyA']) wishDir.sub(right);
+    if (wishDir.lengthSq() > 0) wishDir.normalize();
+
+    this.vel.x += wishDir.x * accel * delta;
+    this.vel.z += wishDir.z * accel * delta;
+
+    // Authentic Drag: 0.6 ground, 0.91 air
+    const hDrag = this.onGround ? 10.0 : 1.2;
+    this.vel.x -= this.vel.x * hDrag * delta;
+    this.vel.z -= this.vel.z * hDrag * delta;
+
+    // Minecraft Vertical Gravity: 0.08 blocks/tick -> 32 blocks/s^2
+    const gravityAccel = 32.0 * this.gravityDir;
     this.vel.y -= gravityAccel * delta;
 
-    // Jump impulse
+    // Jump Impulse (0.42 blocks/tick -> ~9.0 units/s)
     if (this.keys['Space'] && this.onGround) {
-      this.vel.y = 8.5 * this.gravityDir;
+      this.vel.y = 9.2 * this.gravityDir;
       this.onGround = false;
-      sounds.playFootstep(false);
+      sounds.playStep();
     }
 
-    // Auto-step & Discrete axis AABB collision resolution
-    this.resolveCollisions(delta);
+    // SWEPT AABB AXIS-BY-AXIS RESOLUTION WITH 0.6 BLOCK AUTO-STEPPING
+    this.moveWithAABB(delta);
 
-    // Void floor fallback guard
-    if (this.pos.y < -4 || this.pos.y > WORLD_HEIGHT + 10) {
-      this.setupSafeSpawn();
-      this.takeDamage(4);
-    }
-
-    // Camera view positioning
-    const eyeHeight = this.isSneaking ? 1.3 : 1.62;
-    this.camera.position.set(this.pos.x, this.pos.y + (this.gravityDir === 1 ? eyeHeight - 0.9 : -eyeHeight + 0.9), this.pos.z);
+    // Camera placement (eye level at 1.62, sneaking at 1.28)
+    const eyeH = this.isSneaking ? 1.28 : 1.62;
+    this.camera.position.set(
+      this.pos.x,
+      this.pos.y + (this.gravityDir === 1 ? eyeH - 0.9 : -eyeH + 0.9),
+      this.pos.z
+    );
     this.camera.rotation.order = 'YXZ';
     this.camera.rotation.set(this.pitch, this.yaw, this.roll);
 
-    // Walking arm-bobbing & attack swing animations
-    if (this.arm) {
-      if (this.onGround && moveDir.lengthSq() > 0) {
-        this.walkBob += delta * (this.isSprinting ? 14 : 9);
-      } else {
-        this.walkBob = THREE.MathUtils.lerp(this.walkBob, 0, delta * 6);
-      }
-      this.armSwing = Math.max(0, this.armSwing - delta * 4);
-      this.arm.position.y = -0.3 + Math.sin(this.walkBob) * 0.04;
-      this.arm.position.x = 0.35 + Math.cos(this.walkBob * 0.5) * 0.02;
-      this.arm.rotation.x = 0.2 + Math.sin(this.armSwing * Math.PI) * 0.8;
+    // Arm Bobbing & Swing
+    if (this.onGround && wishDir.lengthSq() > 0) {
+      this.walkBob += delta * (this.isSprinting ? 14 : 9);
+      if (Math.sin(this.walkBob) < -0.9) sounds.playStep();
+    } else {
+      this.walkBob = THREE.MathUtils.lerp(this.walkBob, 0, delta * 6);
+    }
+    this.armSwing = Math.max(0, this.armSwing - delta * 4);
+    this.arm.position.y = -0.3 + Math.sin(this.walkBob) * 0.03;
+    this.arm.rotation.x = 0.2 + Math.sin(this.armSwing * Math.PI) * 0.8;
+
+    // Void fallback guard
+    if (this.pos.y < -4 || this.pos.y > WORLD_HEIGHT + 10) {
+      this.respawnAtSurface();
+      this.takeDamage(4);
     }
 
-    // Footstep audio triggers
-    if (this.onGround && moveDir.lengthSq() > 0 && Math.sin(this.walkBob) < -0.9) {
-      sounds.playFootstep();
+    // Trial Course State Progress
+    if (this.trialActive) {
+      this.trialTimer += delta;
+      const mins = Math.floor(this.trialTimer / 60).toString().padStart(2, '0');
+      const secs = (this.trialTimer % 60).toFixed(1).padStart(4, '0');
+      document.getElementById('trial-timer').innerText = `TIME: ${mins}:${secs}`;
+      this.checkTrialStages();
     }
-
-    // Interactive Trial Stage Checkpoints
-    this.checkTrialProgress();
   }
 
-  resolveCollisions(delta) {
-    const hw = 0.3; // Half width
-    const hh = 0.9; // Half height
-
-    // X Axis
+  moveWithAABB(delta) {
+    // 1. Move X axis
     this.pos.x += this.vel.x * delta;
-    if (this.checkBlockCollision(this.pos.x, this.pos.y, this.pos.z, hw, hh)) {
-      this.pos.x -= this.vel.x * delta;
-      this.vel.x = 0;
+    if (this.collides()) {
+      // Auto-step check (0.6 blocks high)
+      if (this.onGround) {
+        this.pos.y += 0.6;
+        if (!this.collides()) {
+          // Success auto-step
+        } else {
+          this.pos.y -= 0.6;
+          this.pos.x -= this.vel.x * delta;
+          this.vel.x = 0;
+        }
+      } else {
+        this.pos.x -= this.vel.x * delta;
+        this.vel.x = 0;
+      }
     }
 
-    // Z Axis
+    // 2. Move Z axis
     this.pos.z += this.vel.z * delta;
-    if (this.checkBlockCollision(this.pos.x, this.pos.y, this.pos.z, hw, hh)) {
-      this.pos.z -= this.vel.z * delta;
-      this.vel.z = 0;
+    if (this.collides()) {
+      if (this.onGround) {
+        this.pos.y += 0.6;
+        if (!this.collides()) {
+          // Success auto-step
+        } else {
+          this.pos.y -= 0.6;
+          this.pos.z -= this.vel.z * delta;
+          this.vel.z = 0;
+        }
+      } else {
+        this.pos.z -= this.vel.z * delta;
+        this.vel.z = 0;
+      }
     }
 
-    // Y Axis
+    // 3. Move Y axis
     this.onGround = false;
     this.pos.y += this.vel.y * delta;
-    if (this.checkBlockCollision(this.pos.x, this.pos.y, this.pos.z, hw, hh)) {
+    if (this.collides()) {
       if (this.gravityDir === 1 && this.vel.y < 0) this.onGround = true;
       if (this.gravityDir === -1 && this.vel.y > 0) this.onGround = true;
       this.pos.y -= this.vel.y * delta;
@@ -1107,13 +1087,13 @@ class PlayerController {
     }
   }
 
-  checkBlockCollision(px, py, pz, hw, hh) {
-    const minX = Math.floor(px - hw);
-    const maxX = Math.floor(px + hw);
-    const minY = Math.floor(py - hh);
-    const maxY = Math.floor(py + hh);
-    const minZ = Math.floor(pz - hw);
-    const maxZ = Math.floor(pz + hw);
+  collides() {
+    const minX = Math.floor(this.pos.x - this.hw);
+    const maxX = Math.floor(this.pos.x + this.hw);
+    const minY = Math.floor(this.pos.y - this.hh);
+    const maxY = Math.floor(this.pos.y + this.hh);
+    const minZ = Math.floor(this.pos.z - this.hw);
+    const maxZ = Math.floor(this.pos.z + this.hw);
 
     for (let x = minX; x <= maxX; x++) {
       for (let y = minY; y <= maxY; y++) {
@@ -1126,27 +1106,41 @@ class PlayerController {
     return false;
   }
 
-  checkTrialProgress() {
-    // Stage 1: Ceiling traverse checkpoint
-    if (this.trialStage === 1 && this.pos.distanceTo(new THREE.Vector3(22.5, 25, 8.5)) < 2.0) {
+  takeDamage(amount) {
+    this.health = Math.max(0, this.health - amount);
+    sounds.playHurt();
+    const overlay = document.getElementById('hurt-overlay');
+    overlay.style.opacity = '1';
+    setTimeout(() => overlay.style.opacity = '0', 120);
+
+    if (this.health <= 0) {
+      this.health = 20;
+      this.respawnAtSurface();
+    }
+    updateStatusHUD();
+  }
+
+  checkTrialStages() {
+    // Stage 1: Ceiling Beacon
+    if (this.trialStage === 1 && this.pos.distanceTo(new THREE.Vector3(24.5, 27.5, 10.5)) < 2.5) {
       this.trialStage = 2;
       this.updateTrialUI();
       sounds.playFanfare();
     }
-    // Stage 2: Sand bridge switch
-    if (this.trialStage === 2 && this.pos.distanceTo(new THREE.Vector3(22.5, 15, 23.5)) < 2.0) {
+    // Stage 2: Sand Bridge Core
+    if (this.trialStage === 2 && this.pos.distanceTo(new THREE.Vector3(24.5, 17.5, 25.5)) < 2.5) {
       this.trialStage = 3;
       this.updateTrialUI();
       sounds.playFanfare();
     }
-    // Stage 3: Creeper blast recovery
-    if (this.trialStage === 3 && this.pos.distanceTo(new THREE.Vector3(34.5, 15, 23.5)) < 2.5) {
+    // Stage 3: Post-Detonation Runway
+    if (this.trialStage === 3 && this.pos.distanceTo(new THREE.Vector3(36.5, 17.5, 25.5)) < 2.5) {
       this.trialStage = 4;
       this.updateTrialUI();
       sounds.playFanfare();
     }
-    // Stage 4: Final Victory Beacon
-    if (this.trialStage === 4 && this.pos.distanceTo(new THREE.Vector3(34.5, 15, 36.5)) < 2.0) {
+    // Stage 4: Final Beacon
+    if (this.trialStage === 4 && this.pos.distanceTo(new THREE.Vector3(36.5, 17.5, 42.5)) < 2.5) {
       this.trialStage = 5;
       this.updateTrialUI();
       sounds.playFanfare();
@@ -1154,93 +1148,128 @@ class PlayerController {
   }
 
   updateTrialUI() {
-    const banner = document.getElementById('trial-banner');
     const title = document.getElementById('trial-title');
     const desc = document.getElementById('trial-desc');
     const badge = document.getElementById('trial-status');
 
-    banner.style.opacity = '1';
     if (this.trialStage === 1) {
-      title.innerText = 'STAGE 1: CEILING TRAVERSE';
-      desc.innerText = 'Press [G] to invert gravity and sprint along the obsidian ceiling runway!';
+      title.innerText = 'STAGE 1: CEILING SLIPSTREAM';
+      desc.innerText = 'Press [G] to invert gravity and sprint across the inverted obsidian runway!';
       badge.innerText = 'STAGE 1';
     } else if (this.trialStage === 2) {
-      title.innerText = 'STAGE 2: COLLAPSING SAND CORE';
-      desc.innerText = 'Sprint across the sand runway, grab the Diamond Core, and hold [R] to rewind back safely!';
+      title.innerText = 'STAGE 2: COLLAPSING SAND SPRINT';
+      desc.innerText = 'Sprint across the sand bridge, reach the beacon, and HOLD [R] to rewind before it collapses!';
       badge.innerText = 'STAGE 2';
     } else if (this.trialStage === 3) {
-      title.innerText = 'STAGE 3: EXPLOSION REVERSAL';
-      desc.innerText = 'The bridge has been blown apart! Hold [R] to reconstruct the voxel bridge and pass!';
+      title.innerText = 'STAGE 3: DETONATION RECONSTRUCTION';
+      desc.innerText = 'The bridge exploded! Hold [R] to reconstruct the walkway and cross safely!';
       badge.innerText = 'STAGE 3';
     } else if (this.trialStage === 4) {
-      title.innerText = 'STAGE 4: VERTICAL RIFT GAUNTLET';
-      desc.innerText = 'Chain mid-air [G] gravity flips between floor and ceiling spikes to reach the beacon!';
+      title.innerText = 'STAGE 4: MID-AIR GRAVITY GAUNTLET';
+      desc.innerText = 'Chain mid-air [G] flips between ceiling and floor pillars to reach the exit!';
       badge.innerText = 'STAGE 4';
     } else if (this.trialStage === 5) {
-      title.innerText = 'ACADEMY CHAMPION!';
-      desc.innerText = 'You mastered Gravitational Inversion and Temporal Rewind! Press [T] to retry anytime.';
-      badge.innerText = 'COMPLETED';
+      title.innerText = 'TRIAL ACADEMY COMPLETE!';
+      desc.innerText = 'Victory! You have mastered Gravitational and Temporal navigation.';
+      badge.innerText = 'CHAMPION';
     }
   }
 }
 
 // =============================================================================
-// 7. USER INTERFACE & FAST CRAFTING
+// 7. SURVIVAL RECIPES & CRAFTING SYSTEM
 // =============================================================================
-function createStatusIcon(container, iconClass, count) {
-  container.innerHTML = '';
-  for (let i = 0; i < count; i++) {
-    const el = document.createElement('div');
-    el.className = `stat-icon ${iconClass}`;
-    container.appendChild(el);
-  }
+function setupCraftingHandlers(player) {
+  document.querySelectorAll('.recipe-btn').forEach(btn => {
+    btn.onclick = () => {
+      const type = btn.getAttribute('data-craft');
+
+      if (type === 'planks') {
+        const slot = player.hotbar.find(s => s && s.id === BLOCKS.OAK_LOG && s.count >= 1);
+        if (slot) {
+          slot.count--;
+          if (slot.count <= 0) player.hotbar[player.hotbar.indexOf(slot)] = null;
+          player.pickupItem(BLOCKS.OAK_PLANKS, 4);
+          sounds.playPlace();
+          updateHotbarUI();
+        }
+      } else if (type === 'sticks') {
+        const slot = player.hotbar.find(s => s && s.id === BLOCKS.OAK_PLANKS && s.count >= 2);
+        if (slot) {
+          slot.count -= 2;
+          if (slot.count <= 0) player.hotbar[player.hotbar.indexOf(slot)] = null;
+          player.pickupItem(ITEMS.STICK, 4);
+          sounds.playPlace();
+          updateHotbarUI();
+        }
+      } else if (type === 'wooden_pickaxe') {
+        const pSlot = player.hotbar.find(s => s && s.id === BLOCKS.OAK_PLANKS && s.count >= 3);
+        const sSlot = player.hotbar.find(s => s && s.id === ITEMS.STICK && s.count >= 2);
+        if (pSlot && sSlot) {
+          pSlot.count -= 3;
+          if (pSlot.count <= 0) player.hotbar[player.hotbar.indexOf(pSlot)] = null;
+          sSlot.count -= 2;
+          if (sSlot.count <= 0) player.hotbar[player.hotbar.indexOf(sSlot)] = null;
+          player.pickupItem(ITEMS.WOODEN_PICKAXE, 1);
+          sounds.playPlace();
+          updateHotbarUI();
+        }
+      } else if (type === 'stone_pickaxe') {
+        const cSlot = player.hotbar.find(s => s && s.id === BLOCKS.COBBLE && s.count >= 3);
+        const sSlot = player.hotbar.find(s => s && s.id === ITEMS.STICK && s.count >= 2);
+        if (cSlot && sSlot) {
+          cSlot.count -= 3;
+          if (cSlot.count <= 0) player.hotbar[player.hotbar.indexOf(cSlot)] = null;
+          sSlot.count -= 2;
+          if (sSlot.count <= 0) player.hotbar[player.hotbar.indexOf(sSlot)] = null;
+          player.pickupItem(ITEMS.STONE_PICKAXE, 1);
+          sounds.playPlace();
+          updateHotbarUI();
+        }
+      }
+    };
+  });
 }
 
+// =============================================================================
+// 8. HUD & GUI UPDATERS
+// =============================================================================
 function updateStatusHUD() {
   const healthBar = document.getElementById('health-bar');
   const hungerBar = document.getElementById('hunger-bar');
-  const xpFill = document.getElementById('xp-bar-fill');
-  const xpLevel = document.getElementById('xp-level-text');
 
-  // Render 10 Hearts
   healthBar.innerHTML = '';
   for (let i = 0; i < 10; i++) {
-    const heart = document.createElement('div');
-    heart.className = 'stat-icon';
-    heart.style.background = i * 2 < player.health ? '#ff2222' : '#330000';
-    heart.style.border = '1px solid #000';
-    heart.style.width = '14px';
-    heart.style.height = '14px';
-    healthBar.appendChild(heart);
+    const el = document.createElement('div');
+    el.className = 'stat-icon';
+    el.style.background = i * 2 < player.health ? '#ff2222' : '#330000';
+    el.style.border = '1px solid #000';
+    healthBar.appendChild(el);
   }
 
-  // Render 10 Hunger drumsticks
   hungerBar.innerHTML = '';
   for (let i = 0; i < 10; i++) {
-    const food = document.createElement('div');
-    food.className = 'stat-icon';
-    food.style.background = i * 2 < player.hunger ? '#d88b2d' : '#2b1b08';
-    food.style.border = '1px solid #000';
-    food.style.width = '14px';
-    food.style.height = '14px';
-    hungerBar.appendChild(food);
+    const el = document.createElement('div');
+    el.className = 'stat-icon';
+    el.style.background = i * 2 < player.hunger ? '#d88b2d' : '#2b1b08';
+    el.style.border = '1px solid #000';
+    hungerBar.appendChild(el);
   }
-
-  xpFill.style.width = `${(player.xp / 30) * 100}%`;
-  xpLevel.innerText = player.level;
 }
 
 function updateHotbarUI() {
   const hotbarEl = document.getElementById('hotbar');
   hotbarEl.innerHTML = '';
+
   player.hotbar.forEach((slot, idx) => {
     const slotEl = document.createElement('div');
     slotEl.className = `hotbar-slot ${idx === player.activeSlot ? 'active' : ''}`;
-    slotEl.title = BLOCK_NAMES[slot.id] || '';
 
-    if (slot.count > 0) {
+    if (slot && slot.count > 0) {
+      const name = ITEM_NAMES[slot.id] || "Item";
+      slotEl.title = name;
       const label = document.createElement('span');
-      label.innerText = (BLOCK_NAMES[slot.id] || '').split(' ')[0];
+      label.innerText = name.split(' ')[0].substring(0, 4);
       label.style.fontSize = '9px';
       label.style.color = '#fff';
       label.style.textShadow = '1px 1px 0 #000';
@@ -1262,8 +1291,7 @@ function updateHotbarUI() {
 
 function toggleInventory() {
   const gui = document.getElementById('inventory-gui');
-  const isHidden = gui.classList.contains('hidden');
-  if (isHidden) {
+  if (gui.classList.contains('hidden')) {
     gui.classList.remove('hidden');
     document.exitPointerLock();
   } else {
@@ -1272,34 +1300,10 @@ function toggleInventory() {
   }
 }
 
-// Fast Crafting Buttons
-document.querySelectorAll('.recipe-btn').forEach(btn => {
-  btn.onclick = () => {
-    const recipe = btn.getAttribute('data-recipe');
-    if (recipe === 'planks') {
-      const logs = player.hotbar.find(s => s.id === BLOCKS.OAK_LOG && s.count >= 1);
-      if (logs) {
-        logs.count--;
-        let slot = player.hotbar.find(s => s.id === BLOCKS.OAK_PLANKS);
-        if (slot) slot.count += 4;
-        sounds.playBlockPlace();
-        updateHotbarUI();
-      }
-    } else if (recipe === 'tnt') {
-      let slot = player.hotbar.find(s => s.id === BLOCKS.TNT);
-      if (slot) {
-        slot.count += 4;
-        sounds.playBlockPlace();
-        updateHotbarUI();
-      }
-    }
-  };
-});
-
 document.getElementById('close-inv-btn').onclick = toggleInventory;
 
 // =============================================================================
-// 8. SCENE INITIALIZATION & GAME LOOP
+// 9. CORE INITIALIZATION & GAME LOOP
 // =============================================================================
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x87ceeb);
@@ -1312,8 +1316,7 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 document.getElementById('game-container').appendChild(renderer.domElement);
 
-// Lighting
-const ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xfffaed, 0.85);
@@ -1321,50 +1324,15 @@ sunLight.position.set(50, 80, 40);
 sunLight.castShadow = true;
 scene.add(sunLight);
 
-// Instantiate Game Components
+// Build subsystems
 const world = new VoxelWorld(scene);
 world.generateWorld();
 
-const mobs = new MobManager(scene, world);
-mobs.spawnMob('creeper', 18, 14, 18);
-mobs.spawnMob('creeper', 28, 15, 23);
-mobs.spawnMob('zombie', 12, 14, 12);
-mobs.spawnMob('pig', 20, 14, 20);
+const drops = new DropItemManager(scene);
+const player = new MinecraftPlayer(camera, world, drops, scene);
+setupCraftingHandlers(player);
 
-const player = new PlayerController(camera, world, mobs, scene);
-
-// Handle TNT Detonations
-function triggerExplosion(pos) {
-  sounds.playExplosion();
-  const radius = 3;
-  const bx = Math.floor(pos.x);
-  const by = Math.floor(pos.y);
-  const bz = Math.floor(pos.z);
-
-  for (let x = -radius; x <= radius; x++) {
-    for (let y = -radius; y <= radius; y++) {
-      for (let z = -radius; z <= radius; z++) {
-        if (x * x + y * y + z * z <= radius * radius) {
-          const old = world.getBlock(bx + x, by + y, bz + z);
-          if (old !== BLOCKS.AIR && old !== BLOCKS.BEDROCK) {
-            world.setBlock(bx + x, by + y, bz + z, BLOCKS.AIR);
-            player.recordBlockAction(bx + x, by + y, bz + z, old, BLOCKS.AIR);
-          }
-        }
-      }
-    }
-  }
-
-  // Knockback player if nearby
-  const d = player.pos.distanceTo(pos);
-  if (d < 5) {
-    player.takeDamage(Math.floor((5 - d) * 3));
-    player.vel.add(new THREE.Vector3().subVectors(player.pos, pos).normalize().multiplyScalar(12));
-  }
-}
-
-// Menu and Start Handlers
-const pauseScreen = document.getElementById('pause-screen');
+// Menu Handlers
 document.getElementById('btn-play').onclick = () => {
   sounds.init();
   document.body.requestPointerLock();
@@ -1372,11 +1340,12 @@ document.getElementById('btn-play').onclick = () => {
 
 document.getElementById('btn-trial').onclick = () => {
   sounds.init();
-  player.teleportToTrial();
+  player.startTrialCourse();
   document.body.requestPointerLock();
 };
 
 document.addEventListener('pointerlockchange', () => {
+  const pauseScreen = document.getElementById('pause-screen');
   if (document.pointerLockElement) {
     pauseScreen.classList.add('hidden');
   } else {
@@ -1386,14 +1355,13 @@ document.addEventListener('pointerlockchange', () => {
   }
 });
 
-// Resize handler
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Main Loop
+// Primary 60FPS Game Loop
 let lastTime = performance.now();
 let fpsCount = 0;
 let fpsTimer = 0;
@@ -1404,7 +1372,6 @@ function animate(currentTime) {
   const delta = Math.min(0.1, (currentTime - lastTime) / 1000);
   lastTime = currentTime;
 
-  // FPS calculations
   fpsCount++;
   fpsTimer += delta;
   if (fpsTimer >= 1.0) {
@@ -1413,19 +1380,20 @@ function animate(currentTime) {
     fpsTimer = 0;
   }
 
-  // Update game components
+  // Updates
   player.update(delta);
-  mobs.update(delta, player.pos, triggerExplosion);
+  drops.update(delta, player, world);
 
-  // Update telemetry
+  // Debug Telemetry
   document.getElementById('dbg-pos').innerText = `XYZ: ${player.pos.x.toFixed(2)} / ${player.pos.y.toFixed(2)} / ${player.pos.z.toFixed(2)}`;
-  document.getElementById('dbg-grav').innerText = `Gravity: ${player.gravityDir.toFixed(1)}`;
-  document.getElementById('dbg-mobs').innerText = `Active Entities: ${mobs.mobs.length}`;
+  document.getElementById('dbg-vel').innerText = `Velocity: X ${player.vel.x.toFixed(2)} | Y ${player.vel.y.toFixed(2)} | Z ${player.vel.z.toFixed(2)}`;
+  document.getElementById('dbg-ground').innerText = `On Ground: ${player.onGround}`;
+  document.getElementById('dbg-entities').innerText = `Active Collectibles: ${drops.items.length}`;
 
   renderer.render(scene, camera);
 }
 
-// Initialize HUD
+// Initial Boot
 updateStatusHUD();
 updateHotbarUI();
 requestAnimationFrame(animate);
