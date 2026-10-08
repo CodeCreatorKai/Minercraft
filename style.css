@@ -24,7 +24,7 @@ body, html {
 }
 
 /* ========================================================
-   HUD STYLES
+   HUD & CROSSHAIR
    ======================================================== */
 #hud {
   position: absolute;
@@ -66,7 +66,7 @@ body, html {
   height: 16px;
 }
 
-/* Status Bars: Hearts, Food, Air */
+/* Status Bars */
 #status-bars {
   position: absolute;
   bottom: 60px;
@@ -91,15 +91,13 @@ body, html {
 
 .stat-container {
   display: flex;
-  gap: 1px;
+  gap: 2px;
 }
 
 .stat-icon {
-  width: 16px;
-  height: 16px;
-  background-size: contain;
-  background-repeat: no-repeat;
-  image-rendering: pixelated;
+  width: 14px;
+  height: 14px;
+  border-radius: 1px;
 }
 
 /* XP Bar */
@@ -146,7 +144,7 @@ body, html {
   transform: translateX(-50%);
   display: flex;
   gap: 2px;
-  background: rgba(0, 0, 0, 0.4);
+  background: rgba(0, 0, 0, 0.45);
   padding: 3px;
   border: 2px solid #333;
   border-radius: 4px;
@@ -171,12 +169,6 @@ body, html {
   background: #a0a0a0;
 }
 
-.slot-icon {
-  width: 28px;
-  height: 28px;
-  image-rendering: pixelated;
-}
-
 .slot-count {
   position: absolute;
   bottom: 1px;
@@ -187,7 +179,7 @@ body, html {
   text-shadow: 1px 1px 0 #000;
 }
 
-/* Twist Status Badges */
+/* Twist Indicators */
 #twist-status {
   position: absolute;
   top: 15px;
@@ -210,26 +202,12 @@ body, html {
   box-shadow: 0 4px 10px rgba(0,0,0,0.5);
 }
 
-#gravity-badge {
-  border-color: #aa44ff;
-}
+#gravity-badge { border-color: #aa44ff; }
+#rewind-badge { border-color: #44ffaa; }
+#trial-badge { border-color: #ffbb00; }
 
-#rewind-badge {
-  border-color: #44ffaa;
-}
-
-#trial-badge {
-  border-color: #ffbb00;
-}
-
-.key-hint {
-  color: #ffdd44;
-}
-
-.gold-txt {
-  color: #ffdd44;
-  font-weight: bold;
-}
+.key-hint { color: #ffdd44; }
+.gold-txt { color: #ffdd44; font-weight: bold; }
 
 /* Trial Banner */
 #trial-banner {
@@ -237,29 +215,35 @@ body, html {
   top: 60px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(15, 10, 25, 0.9);
+  background: rgba(15, 10, 25, 0.95);
   border: 2px solid #ffaa00;
   border-radius: 6px;
-  padding: 10px 20px;
+  padding: 12px 24px;
   text-align: center;
   box-shadow: 0 0 15px rgba(255, 170, 0, 0.4);
-  transition: opacity 0.3s;
 }
 
 #trial-title {
   color: #ffcc00;
   font-weight: bold;
-  font-size: 15px;
+  font-size: 16px;
   letter-spacing: 1px;
 }
 
 #trial-desc {
-  font-size: 12px;
+  font-size: 13px;
   color: #eee;
   margin-top: 4px;
 }
 
-/* Rewind Scanline FX Overlay */
+#trial-timer {
+  font-size: 14px;
+  font-weight: bold;
+  color: #55ffff;
+  margin-top: 6px;
+}
+
+/* Rewind FX */
 #rewind-overlay {
   position: absolute;
   top: 0;
@@ -306,7 +290,7 @@ body, html {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(255, 0, 0, 0.4);
+  background: rgba(255, 0, 0, 0.45);
   pointer-events: none;
   opacity: 0;
   transition: opacity 0.08s ease-out;
@@ -321,7 +305,7 @@ body, html {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.78);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -369,12 +353,11 @@ body, html {
   border-top-color: #aaa;
   border-left-color: #aaa;
   padding: 12px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: bold;
   font-family: inherit;
   cursor: pointer;
   text-shadow: 1px 1px 0 #000;
-  transition: background 0.1s;
 }
 
 .mc-btn:hover {
@@ -383,19 +366,13 @@ body, html {
   border-left-color: #fff;
 }
 
-.mc-btn:active {
-  background: #555;
-}
-
 .mc-btn.gold {
   background: #b8860b;
   border-top-color: #ffd700;
   border-left-color: #ffd700;
 }
 
-.mc-btn.gold:hover {
-  background: #d4a017;
-}
+.mc-btn.gold:hover { background: #d4a017; }
 
 .instructions-panel {
   background: #1c1c1c;
@@ -455,7 +432,7 @@ body, html {
   border-top-color: #fff;
   border-left-color: #fff;
   color: #373737;
-  width: 500px;
+  width: 520px;
   padding: 16px;
   box-shadow: 0 10px 30px rgba(0,0,0,0.7);
 }
@@ -495,14 +472,12 @@ body, html {
   border-left-color: #fff;
   padding: 8px;
   font-family: inherit;
-  font-size: 12px;
+  font-size: 11px;
   cursor: pointer;
   text-align: left;
 }
 
-.recipe-btn:hover {
-  background: #a5a5a5;
-}
+.recipe-btn:hover { background: #a5a5a5; }
 
 #backpack-grid, #inv-hotbar-grid {
   display: grid;
@@ -527,6 +502,4 @@ body, html {
   border-radius: 4px;
 }
 
-.hidden {
-  display: none !important;
-}
+.hidden { display: none !important; }
